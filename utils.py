@@ -3,6 +3,7 @@ import os
 import log
 from scipy.spatial.transform import Rotation as R
 import numpy as np
+import torch
 
 
 class Plotter(object):
@@ -68,3 +69,24 @@ def pose2motion(data, skip=0):
         motion_line = np.array(motion[0:3,:]).reshape(1,12)
         all_motion[i,:] = motion_line
     return all_motion
+
+
+def load_kiiti_intrinsics(filename):
+    '''
+    load intrinsics from kitti intrinsics file
+    '''
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+    cam_intrinsics = lines[2].strip().split(' ')[1:]
+    focalx, focaly, centerx, centery = float(cam_intrinsics[0]), float(cam_intrinsics[5]), float(cam_intrinsics[2]), float(cam_intrinsics[6])
+
+    return focalx, focaly, centerx, centery
+
+def make_intrinsics_layer(w, h, fx, fy, ox, oy):
+    ww, hh = np.meshgrid(range(w), range(h))
+    ww = (ww.astype(np.float32) - ox + 0.5 )/fx
+    hh = (hh.astype(np.float32) - oy + 0.5 )/fy
+
+    # intrinsicLayer = np.stack((ww,hh)).transpose(1,2,0)
+    intrinsicLayer = np.stack((ww,hh))
+    return torch.Tensor(intrinsicLayer)

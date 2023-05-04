@@ -7,6 +7,7 @@ import torch.nn as nn
 from .common import *
 from params import par
 
+
 def linear(in_planes, out_planes):
     return nn.Sequential(
         nn.Linear(in_planes, out_planes), 
@@ -26,12 +27,15 @@ class Encoder(nn.Module):
         
         # FF_RCAN or FF_Resblocks
         self.interpolate = Interpolation(3, 12, in_channels * (4**depth), act=relu)
+        # self.intrinsic = make_intrinsics_layer(par.img_w, par.img_h, 707.0912/4, 707.0912/4, par.img_w/4, par.img_h/4)
+        # print(self.intrinsic.shape)
     def forward(self, x1, x2):
         """
         Encoder: Shuffle-spread --> Feature Fusion --> Return fused features
         """
         feats1 = self.shuffler(x1)
         feats2 = self.shuffler(x2)
+        # intrinsic = self.shuffler(self.intrinsic.repeat(par.batch_size*(par.seq_len-1)))
         feats = self.interpolate(feats1, feats2)
         return feats
 
@@ -63,14 +67,14 @@ class CAIN(nn.Module):
         fc2_rot = linear(128,32)
         fc3_rot = nn.Linear(32,3)
 
-        fc1_covar = linear(fcnum,128)
-        fc2_covar = linear(128,32)
-        fc3_covar = linear(32,6)
+        # fc1_covar = linear(fcnum,128)
+        # fc2_covar = linear(128,32)
+        # fc3_covar = linear(32,6)
 
 
         self.trans = nn.Sequential(fc1_trans, fc2_trans, fc3_trans)
         self.rot = nn.Sequential(fc1_rot, fc2_rot, fc3_rot)
-        self.covar = nn.Sequential(fc1_covar,fc2_covar,fc3_covar)
+        # self.covar = nn.Sequential(fc1_covar,fc2_covar,fc3_covar)
     def forward(self, x1, x2):
         # x1, m1 = sub_mean(x1)
         # x2, m2 = sub_mean(x2)
@@ -86,12 +90,13 @@ class CAIN(nn.Module):
         # feats += mi
         x_trans = self.trans(feats)
         x_rot = self.rot(feats)
-        x_covar = self.covar(feats)
+        # x_covar = self.covar(feats)
         # out = self.decoder(feats)
 
         # if not self.training:
         #     out = paddingOutput(out)
-        out =  torch.cat((x_trans, x_rot,x_covar), dim=1)
+        # out =  torch.cat((x_trans, x_rot,x_covar), dim=1)
+        out =  torch.cat((x_trans, x_rot), dim=1)
         # print("out:", out.shape)
 
         # return out, feats

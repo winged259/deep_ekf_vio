@@ -168,14 +168,14 @@ class IMUKalmanFilter(nn.Module):
 
         return residual, H
 
-    def update(self, pred_state, pred_covar, vis_meas, vis_meas_covar, T_imu_cam):
+    def update(self, pred_state, pred_covar, vis_meas, T_imu_cam):
         mm = torch.matmul
         g_pred, C_pred, r_pred, v_pred, bw_pred, ba_pred = IMUKalmanFilter.decode_state_b(pred_state)
         residual, H = self.meas_residual_and_jacobi(C_pred, r_pred, vis_meas, T_imu_cam)
 
         H = -H  # this is required for EKF, since the way we derived the Jacobian are for batch methods
         H_transpose = H.transpose(-2, -1)
-        S = mm(mm(H, pred_covar), H_transpose) + vis_meas_covar
+        S = mm(mm(H, pred_covar), H_transpose) 
         K = mm(mm(pred_covar, H_transpose), S.inverse())
 
         est_error = mm(K, residual)
@@ -230,7 +230,7 @@ class IMUKalmanFilter(nn.Module):
             pred_states, pred_covars = self.predict(imu_data[:, k], imu_noise_covar,
                                                     states_over_timesteps[-1], covars_over_timesteps[-1])
             est_state, est_covar = self.update(pred_states[-1], pred_covars[-1],
-                                               vis_meas[:, k], vis_meas_covar[:, k], T_imu_cam)
+                                               vis_meas[:, k], T_imu_cam)
             new_pose, new_state, new_covar = self.composition(poses_over_timesteps[-1], est_state, est_covar)
 
             poses_over_timesteps.append(new_pose)
@@ -370,7 +370,7 @@ class E2EVIO(nn.Module):
         states_over_timesteps = [prev_state]
         covars_over_timesteps = [prev_covar]
         vis_meas_over_timesteps = []
-        vis_meas_covar_over_timesteps = []
+        # vis_meas_covar_over_timesteps = []
         for k in range(0, num_timesteps):
             # ekf predict
             pred_states, pred_covars = self.ekf_module.predict(imu_data[:, k], imu_noise_covar,
@@ -389,22 +389,21 @@ class E2EVIO(nn.Module):
             vis_meas_and_covar = feature_vector
             vis_meas = vis_meas_and_covar[:,0:6]
             # process vis meas covar
-            if par.vis_meas_covar_use_fixed:
-                vis_meas_covar_diag = torch.tensor(par.vis_meas_fixed_covar,
-                                                   dtype=torch.float32, device=vis_meas.device)
-                vis_meas_covar_diag = vis_meas_covar_diag * vis_meas_covar_scale
-                vis_meas_covar_diag = vis_meas_covar_diag.repeat(vis_meas.shape[0], 1)
-            else:
-                vis_meas_covar_diag = par.vis_meas_covar_init_guess * \
-                                      10 ** (par.vis_meas_covar_beta *
-                                             torch.tanh(par.vis_meas_covar_gamma * vis_meas_and_covar[:, 6:12]))
-            vis_meas_covar_scaled = torch.diag_embed(vis_meas_covar_diag / vis_meas_covar_scale.view(1, 6))
-            vis_meas_covar = torch.diag_embed(vis_meas_covar_diag)
+            # if par.vis_meas_covar_use_fixed:
+            #     vis_meas_covar_diag = torch.tensor(par.vis_meas_fixed_covar,
+            #                                        dtype=torch.float32, device=vis_meas.device)
+            #     vis_meas_covar_diag = vis_meas_covar_diag * vis_meas_covar_scale
+            #     vis_meas_covar_diag = vis_meas_covar_diag.repeat(vis_meas.shape[0], 1)
+            # else:
+            #     vis_meas_covar_diag = par.vis_meas_covar_init_guess * \
+            #                           10 ** (par.vis_meas_covar_beta *
+            #                                  torch.tanh(par.vis_meas_covar_gamma * vis_meas_and_covar[:, 6:12]))
+            # vis_meas_covar_scaled = torch.diag_embed(vis_meas_covar_diag / vis_meas_covar_scale.view(1, 6))
+            # vis_meas_covar = torch.diag_embed(vis_meas_covar_diag)
 
             # ekf correct
             est_state, est_covar = self.ekf_module.update(pred_states[-1], pred_covars[-1],
                                                           vis_meas.unsqueeze(-1),
-                                                          vis_meas_covar_scaled,
                                                           T_imu_cam)
             new_pose, new_state, new_covar = self.ekf_module.composition(poses_over_timesteps[-1],
                                                                          est_state, est_covar)
@@ -413,10 +412,9 @@ class E2EVIO(nn.Module):
             states_over_timesteps.append(new_state)
             covars_over_timesteps.append(new_covar)
             vis_meas_over_timesteps.append(vis_meas)
-            vis_meas_covar_over_timesteps.append(vis_meas_covar)
+            # vis_meas_covar_over_timesteps.append(vis_meas_covar)
 
         return torch.stack(vis_meas_over_timesteps, 1), \
-               torch.stack(vis_meas_covar_over_timesteps, 1), \
                torch.stack(poses_over_timesteps, 1), \
                torch.stack(states_over_timesteps, 1), \
                torch.stack(covars_over_timesteps, 1)

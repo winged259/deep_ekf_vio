@@ -75,6 +75,7 @@ class _TrainAssistant(object):
         self.clip = par.clip
         # self.lstm_state_cache = {}
         self.epoch = 0
+        self.criterion = torch.nn.L1Loss()
 
     # def update_lstm_state(self, t_x_meta, lstm_states):
     #     # lstm_states has the dimension of (# batch, 2 (hidden/cell), lstm layers, lstm hidden size)
@@ -115,7 +116,7 @@ class _TrainAssistant(object):
         #     prev_lstm_states = self.retrieve_lstm_state(meta_data)
         #     prev_lstm_states = prev_lstm_states.cuda()
 
-        vis_meas, vis_meas_covar,poses, ekf_states, ekf_covars = \
+        vis_meas, poses, ekf_states, ekf_covars = \
             self.model.forward(images.cuda(),
                                imu_data.cuda(),
                                gt_poses[:, 0].inverse().cuda(),
@@ -130,15 +131,15 @@ class _TrainAssistant(object):
             vis_meas_loss_invalid_imu = 0
             if not np.all(s):
                 _, loss_abs, loss_vis_meas = self.ekf_loss(poses[~s], gt_poses[~s].cuda(), ekf_states[~s],
-                                                              gt_rel_poses[~s].cuda(), vis_meas[~s], vis_meas_covar[~s])
+                                                              gt_rel_poses[~s].cuda(), vis_meas[~s])
             if np.any(s):
-                vis_meas_loss_invalid_imu = self.vis_meas_loss(vis_meas[s], vis_meas_covar[s], gt_rel_poses[s].cuda())
+                vis_meas_loss_invalid_imu = self.vis_meas_loss(vis_meas[s], gt_rel_poses[s].cuda())
 
             loss = vis_meas_loss_invalid_imu + loss_vis_meas + 4 * loss_abs
         elif par.enable_ekf:
-            loss, _, _ = self.ekf_loss(poses, gt_poses.cuda(), ekf_states, gt_rel_poses.cuda(), vis_meas, vis_meas_covar)
+            loss, _, _ = self.ekf_loss(poses, gt_poses.cuda(), ekf_states, gt_rel_poses.cuda(), vis_meas)
         else:
-            loss = self.vis_meas_loss(vis_meas, vis_meas_covar, gt_rel_poses.cuda())
+            loss = self.vis_meas_loss(vis_meas, gt_rel_poses.cuda())
 
         # if par.stateful_training:
         #     lstm_states = lstm_states.detach().cpu()
@@ -151,22 +152,27 @@ class _TrainAssistant(object):
 
         return loss
 
-    def vis_meas_loss(self, predicted_rel_poses, vis_meas_covar, gt_rel_poses):
+    def vis_meas_loss(self, predicted_rel_poses, gt_rel_poses):
         # Weighted MSE Loss
-        angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
-        trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
+        # angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
+        # trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
 
-        if par.gaussian_pdf_loss:
-            Q_det = torch.prod(torch.diagonal(vis_meas_covar, dim1=-2, dim2=-1), -1)
-            log_Q_norm = torch.log(Q_det)
-            err = predicted_rel_poses - gt_rel_poses
-            scale = np.ones(6, dtype=np.float32)
-            scale[0:3] = scale[0:3] * np.sqrt(par.k1)
-            err = par.k4 * torch.unsqueeze(err * torch.tensor(scale, device=vis_meas_covar.device).view(1, 1, 6), -1)
-            err_weighted_by_covar = torch.matmul(torch.matmul(err.transpose(-2, -1), vis_meas_covar.inverse()), err)
-            loss = torch.mean(log_Q_norm + torch.squeeze(err_weighted_by_covar))
-        else:
-            loss = (par.k1 * angle_loss + trans_loss)
+        # trans_norm = torch.norm(predicted_rel_poses[:, :, 3:6], dim=2).view(predicted_rel_poses.shape[0],predicted_rel_poses.shape[1], 1)
+        # output_norm = predicted_rel_poses[:, :, 3:6]/trans_norm
+        # gt_norm = gt_rel_poses[:, :, 0:3]/trans_norm
+        trans_loss = self.criterion(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
+        angle_loss = self.criterion(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
+        # if par.gaussian_pdf_loss:
+        #     # Q_det = torch.prod(torch.diagonal(vis_meas_covar, dim1=-2, dim2=-1), -1)
+        #     # log_Q_norm = torch.log(Q_det)
+        #     err = predicted_rel_poses - gt_rel_poses
+        #     scale = np.ones(6, dtype=np.float32)
+        #     scale[0:3] = scale[0:3] * np.sqrt(par.k1)
+        #     err = par.k4 * torch.unsqueeze(err * torch.tensor(scale, device=vis_meas_covar.device).view(1, 1, 6), -1)
+        #     # err_weighted_by_covar = torch.matmul(torch.matmul(err.transpose(-2, -1), vis_meas_covar.inverse()), err)
+        #     loss = torch.mean(torch.squeeze(err_weighted_by_covar))
+        # else:
+        loss = (par.k1 * angle_loss + trans_loss)
 
         # log the loss
         tag_name = "train" if self.model.training else "val"
@@ -188,24 +194,24 @@ class _TrainAssistant(object):
         add_scalar(tag_name + "_vis/trans_loss/y", trans_y_loss, iterations)
         add_scalar(tag_name + "_vis/trans_loss/z", trans_z_loss, iterations)
 
-        vis_meas_covar_diag = torch.diagonal(vis_meas_covar, dim1=-2, dim2=-1)
-        add_hist = logger.tensorboard.add_histogram
-        add_scalar(tag_name + "_vis_covar/ave/rot_x", torch.mean(vis_meas_covar_diag[:, :, 0]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/rot_y", torch.mean(vis_meas_covar_diag[:, :, 1]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/rot_z", torch.mean(vis_meas_covar_diag[:, :, 2]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/trans_x", torch.mean(vis_meas_covar_diag[:, :, 3]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/trans_y", torch.mean(vis_meas_covar_diag[:, :, 4]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/trans_z", torch.mean(vis_meas_covar_diag[:, :, 5]), iterations)
-        add_hist(tag_name + "_vis_covar/hist/rot_x", vis_meas_covar_diag[:, :, 0].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/rot_y", vis_meas_covar_diag[:, :, 1].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/rot_z", vis_meas_covar_diag[:, :, 2].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/trans_x", vis_meas_covar_diag[:, :, 3].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/trans_y", vis_meas_covar_diag[:, :, 4].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/trans_z", vis_meas_covar_diag[:, :, 5].view(-1), iterations)
+        # vis_meas_covar_diag = torch.diagonal(vis_meas_covar, dim1=-2, dim2=-1)
+        # add_hist = logger.tensorboard.add_histogram
+        # add_scalar(tag_name + "_vis_covar/ave/rot_x", torch.mean(vis_meas_covar_diag[:, :, 0]), iterations)
+        # add_scalar(tag_name + "_vis_covar/ave/rot_y", torch.mean(vis_meas_covar_diag[:, :, 1]), iterations)
+        # add_scalar(tag_name + "_vis_covar/ave/rot_z", torch.mean(vis_meas_covar_diag[:, :, 2]), iterations)
+        # add_scalar(tag_name + "_vis_covar/ave/trans_x", torch.mean(vis_meas_covar_diag[:, :, 3]), iterations)
+        # add_scalar(tag_name + "_vis_covar/ave/trans_y", torch.mean(vis_meas_covar_diag[:, :, 4]), iterations)
+        # add_scalar(tag_name + "_vis_covar/ave/trans_z", torch.mean(vis_meas_covar_diag[:, :, 5]), iterations)
+        # add_hist(tag_name + "_vis_covar/hist/rot_x", vis_meas_covar_diag[:, :, 0].view(-1), iterations)
+        # add_hist(tag_name + "_vis_covar/hist/rot_y", vis_meas_covar_diag[:, :, 1].view(-1), iterations)
+        # add_hist(tag_name + "_vis_covar/hist/rot_z", vis_meas_covar_diag[:, :, 2].view(-1), iterations)
+        # add_hist(tag_name + "_vis_covar/hist/trans_x", vis_meas_covar_diag[:, :, 3].view(-1), iterations)
+        # add_hist(tag_name + "_vis_covar/hist/trans_y", vis_meas_covar_diag[:, :, 4].view(-1), iterations)
+        # add_hist(tag_name + "_vis_covar/hist/trans_z", vis_meas_covar_diag[:, :, 5].view(-1), iterations)
 
         return loss
 
-    def ekf_loss(self, est_poses, gt_poses, ekf_states, gt_rel_poses, vis_meas, vis_meas_covar):
+    def ekf_loss(self, est_poses, gt_poses, ekf_states, gt_rel_poses, vis_meas):
         abs_errors = torch.matmul(est_poses[:, 1:], gt_poses[:, 1:])
         length_div = torch.arange(start=1, end=abs_errors.size(1) + 1, device=abs_errors.device,
                                   dtype=torch.float32).view(1, -1, 1)
@@ -234,7 +240,7 @@ class _TrainAssistant(object):
         loss_abs = abs_trans_loss * par.k4 ** 2
         # loss_rel = (par.k1 * rel_angle_loss + rel_trans_loss)
         # loss = k3 * loss_rel + (1 - k3) * loss_abs
-        loss_vis_meas = self.vis_meas_loss(vis_meas, vis_meas_covar, gt_rel_poses)
+        loss_vis_meas = self.vis_meas_loss(vis_meas, gt_rel_poses)
         loss = k3 * loss_vis_meas + (1 - k3) * loss_abs
 
         assert not torch.any(torch.isnan(loss))

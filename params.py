@@ -71,11 +71,11 @@ class Parameters(object):
 
         # Training parameters
         self.epochs = 50
-        self.batch_size = 8
+        self.batch_size = 32
         self.pin_mem = True
         self.cache_image = True
-        self.optimizer = torch.optim.SparseAdam
-        self.optimizer_args = {'lr': 1e-4}
+        self.optimizer = torch.optim.Adam
+        self.optimizer_args = {'lr': 1e-5}
         self.param_specific_lr = {
             "init_covar_diag_sqrt": 1e-1,
             "imu_noise_covar_weights.*": 1e-1
@@ -139,6 +139,7 @@ class KITTIParams(Parameters):
         self.eval_seq = "K07"
 
         # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        # self.train_seqs = ['K04','K08','K09','K10']
         self.train_seqs = ['K04']
         self.valid_seqs = [self.eval_seq]
 
@@ -147,7 +148,7 @@ class KITTIParams(Parameters):
         # self.train_seqs = ['K08']
         # self.valid_seqs = ['K07']
 
-        self.img_w = 320
+        self.img_w = 312
         self.img_h = 96
         self.img_means = (-0.138843, -0.119405, -0.123209)
         self.img_stds = (1, 1, 1)

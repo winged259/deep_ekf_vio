@@ -13,7 +13,7 @@ from log import logger
 def gen_trajectory_rel_iter(model, dataloader, prop_lstm_states, initial_pose=np.eye(4, 4)):
     predicted_abs_poses = [np.array(initial_pose), ]
     predicted_rel_poses = []
-    vis_meas_covars = []
+    # vis_meas_covars = []
     # lstm_states = None  # none defaults to zero
     for i, data in enumerate(dataloader):
         print('%d/%d (%.2f%%)' % (i, len(dataloader), i * 100 / len(dataloader)), end="\r")
@@ -23,24 +23,24 @@ def gen_trajectory_rel_iter(model, dataloader, prop_lstm_states, initial_pose=np
 
         # lstm_states = lstm_states if prop_lstm_states else None
         # we only care about the results from the VO front ends here
-        vis_meas, vis_meas_covar, _, _, _ = model.forward(images.cuda(),
+        vis_meas, _, _, _ = model.forward(images.cuda(),
                                                                        imu_data.cuda(),
                                                                        gt_poses[:, 0].inverse().cuda(),
                                                                        prev_state.cuda(), None,
                                                                        T_imu_cam.cuda())
 
         vis_meas = vis_meas.detach().cpu().numpy()
-        vis_meas_covar = vis_meas_covar.detach().cpu().numpy()
+        # vis_meas_covar = vis_meas_covar.detach().cpu().numpy()
 
         for i, rel_pose in enumerate(vis_meas[-1]):  # select the only batch
             T_vkm1_vk = se3.T_from_Ct(se3.exp_SO3(rel_pose[0:3]), rel_pose[3:6])
             T_i_vk = predicted_abs_poses[-1].dot(T_vkm1_vk)
             se3.log_SO3(T_i_vk[0:3, 0:3])  # just here to check for warnings
             predicted_abs_poses.append(T_i_vk)
-            vis_meas_covars.append(vis_meas_covar[-1][i])
+            # vis_meas_covars.append(vis_meas_covar[-1][i])
             predicted_rel_poses.append(rel_pose)
 
-    return predicted_abs_poses, predicted_rel_poses, vis_meas_covars
+    return predicted_abs_poses, predicted_rel_poses
 
 
 def gen_trajectory_abs_iter(model, dataloaders):
@@ -50,7 +50,7 @@ def gen_trajectory_abs_iter(model, dataloaders):
     est_states_dict = {k: [] for k in dataloaders.keys()}
     est_covars_dict = {k: [] for k in dataloaders.keys()}
     est_vis_meas_dict = {k: [] for k in dataloaders.keys()}
-    vis_meas_covar_dict = {k: [] for k in dataloaders.keys()}
+    # vis_meas_covar_dict = {k: [] for k in dataloaders.keys()}
     # lstm_states_dict = dict.fromkeys(dataloaders.keys())
 
     max_length = max([len(dataloaders[k]) for k in dataloaders])
@@ -80,7 +80,7 @@ def gen_trajectory_abs_iter(model, dataloaders):
             prev_covar = None
             # lstm_states = None
 
-        vis_meas, vis_meas_covar,  est_poses, est_ekf_states, est_ekf_covars = \
+        vis_meas,  est_poses, est_ekf_states, est_ekf_covars = \
             model.forward(images, imu_data, prev_pose, prev_state, prev_covar, T_imu_cam)
 
         for j, k in enumerate(data):
@@ -91,10 +91,10 @@ def gen_trajectory_abs_iter(model, dataloaders):
             est_covars_dict[k] += list(est_ekf_covars[j].detach().cpu().numpy())[slice_start:]
 
             est_vis_meas_dict[k] += list(vis_meas[j].detach().cpu().numpy())
-            vis_meas_covar_dict[k] += list(vis_meas_covar[j].detach().cpu().numpy())
+            # vis_meas_covar_dict[k] += list(vis_meas_covar[j].detach().cpu().numpy())
             # lstm_states_dict[k] = lstm_states[j].detach()
 
-    return est_vis_meas_dict, vis_meas_covar_dict, est_poses_dict, est_states_dict, est_covars_dict
+    return est_vis_meas_dict, est_poses_dict, est_states_dict, est_covars_dict
 
 
 def gen_trajectory(model_file_path, sequences, seq_len, prop_lstm_states):
@@ -132,17 +132,17 @@ def gen_trajectory(model_file_path, sequences, seq_len, prop_lstm_states):
 
         if par.enable_ekf:
             logger.print("With EKF enabled ...")
-            est_vis_meas_dict, vis_meas_covar_dict, est_poses_dict, est_states_dict, est_covars_dict = \
+            est_vis_meas_dict, est_poses_dict, est_states_dict, est_covars_dict = \
                 gen_trajectory_abs_iter(model, {seq: dataloader})
             est_vis_meas = est_vis_meas_dict[seq]
-            vis_meas_covar = vis_meas_covar_dict[seq]
+            # vis_meas_covar = vis_meas_covar_dict[seq]
             est_states = est_states_dict[seq]
             est_covars = est_covars_dict[seq]
             est_poses = est_poses_dict[seq]
             np.save(logger.ensure_file_dir_exists(
                     os.path.join(working_dir, "ekf_states", "vis_meas", seq + ".npy")), est_vis_meas)
-            np.save(logger.ensure_file_dir_exists(
-                    os.path.join(working_dir, "ekf_states", "vis_meas_covar", seq + ".npy")), vis_meas_covar)
+            # np.save(logger.ensure_file_dir_exists(
+            #         os.path.join(working_dir, "ekf_states", "vis_meas_covar", seq + ".npy")), vis_meas_covar)
             np.save(logger.ensure_file_dir_exists(
                     os.path.join(working_dir, "ekf_states", "poses", seq + ".npy")), est_poses)
             np.save(logger.ensure_file_dir_exists(
@@ -155,13 +155,13 @@ def gen_trajectory(model_file_path, sequences, seq_len, prop_lstm_states):
             est_poses = np.linalg.inv(np.array(est_poses_dict[seq]).astype(np.float64))
         else:
             logger.print("Without EKF enabled ...")
-            est_poses, est_vis_meas, vis_meas_covar = gen_trajectory_rel_iter(
+            est_poses, est_vis_meas = gen_trajectory_rel_iter(
                     model, dataloader, prop_lstm_states, initial_pose=gt_abs_poses[0, :, :])
 
         np.save(logger.ensure_file_dir_exists(os.path.join(working_dir, "vis_meas", "meas", seq + ".npy")),
                 est_vis_meas)
-        np.save(logger.ensure_file_dir_exists(os.path.join(working_dir, "vis_meas", "covar", seq + ".npy")),
-                vis_meas_covar)
+        # np.save(logger.ensure_file_dir_exists(os.path.join(working_dir, "vis_meas", "covar", seq + ".npy")),
+        #         vis_meas_covar)
         np.save(logger.ensure_file_dir_exists(os.path.join(working_dir, "est_poses", seq + ".npy")), est_poses)
         np.save(logger.ensure_file_dir_exists(os.path.join(working_dir, "gt_poses", seq + ".npy")),
                 gt_abs_poses[:len(est_poses)])  # ensure same length as est poses
