@@ -61,7 +61,7 @@ class Parameters(object):
         self.stateful_training = True
 
         # EKF parameters
-        self.enable_ekf = True
+        self.enable_ekf = False
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
@@ -70,11 +70,11 @@ class Parameters(object):
         self.vis_meas_covar_use_fixed = False
 
         # Training parameters
-        self.epochs = 100
+        self.epochs = 50
         self.batch_size = 8
         self.pin_mem = True
         self.cache_image = True
-        self.optimizer = torch.optim.Adadelta
+        self.optimizer = torch.optim.SparseAdam
         self.optimizer_args = {'lr': 1e-4}
         self.param_specific_lr = {
             "init_covar_diag_sqrt": 1e-1,
@@ -92,9 +92,9 @@ class Parameters(object):
             }
         })
         # Pretrain, Resume training
-        # self.pretrained_flownet = os.path.join(self.project_dir, './pretrained/ems_transposenet_7scenes_pretrained.pth')
+        # self.pretrained_flownet = os.path.join(self.project_dir, './pretrained/pretrained_cain.pth')
         self.pretrained_flownet = None
-        self.pretrained_backbone = os.path.join(self.project_dir, './pretrained/efficientnet-b0.pth' )
+        # self.pretrained_backbone = os.path.join(self.project_dir, './pretrained/pretrained_cain.pth' )
         # Choice:
         # None
         # './pretrained/flownets_bn_EPE2.459.pth.tar'
@@ -110,7 +110,7 @@ class Parameters(object):
         self.reduction = ["reduction_4", "reduction_3"]
         self.dim_feedforward = 256
         self.learn_embedding_with_pose_token = False
-        self.use_lstm = True
+        # self.use_lstm = True
 
 
     def wc(self, seqs):
@@ -138,7 +138,8 @@ class KITTIParams(Parameters):
         self.all_seqs = self.wc(['K00_*', 'K01', 'K02_*', 'K04', 'K05_*', 'K06', 'K07', 'K08', 'K09', 'K10'])
         self.eval_seq = "K07"
 
-        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        self.train_seqs = ['K04']
         self.valid_seqs = [self.eval_seq]
 
         # self.train_seqs = self.wc(['K00_*', 'K01', 'K02_*', 'K05_*', 'K08', 'K09'])
@@ -260,5 +261,5 @@ class EUROCParams(Parameters):
         return "EUROC"
 
 
-# par = KITTIParams()
-par = EUROCParams()
+par = KITTIParams()
+# par = EUROCParams()

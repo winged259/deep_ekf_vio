@@ -14,7 +14,6 @@ oxts = loadOxtsliteData(base_dir);
 
 % transform to poses
 poses = convertOxtsToPose(oxts);
-
 file = fopen(strcat(base_dir, '/oxts/poses.txt'),'w');
 % T_velo_imu = importdata(strcat(base_dir, '/../T_velo_imu.txt'));
 % T_cam_velo = importdata(strcat(base_dir, '/../T_cam_velo.txt'));
@@ -37,7 +36,8 @@ for i=1:size(poses, 3)
 %     poses(:,:,i) = T_cam_imu * poses(:,:,i) * inv(T_cam_imu);
     p = poses(:,:,i)';
     p = p(1:12);
-   
+    fprintf(file, '%.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n', ...
+        p(1), p(2), p(3), p(4), p(5), p(6), p(7), p(8), p(9), p(10), p(11), p(12));
     posmodes(i) = oxts{i}(end - 2);
     velmodes(i) = oxts{i}(end - 1);
     rotmodes(i) = oxts{i}(end);

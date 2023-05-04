@@ -14,23 +14,21 @@ def gen_trajectory_rel_iter(model, dataloader, prop_lstm_states, initial_pose=np
     predicted_abs_poses = [np.array(initial_pose), ]
     predicted_rel_poses = []
     vis_meas_covars = []
-    lstm_states = None  # none defaults to zero
+    # lstm_states = None  # none defaults to zero
     for i, data in enumerate(dataloader):
         print('%d/%d (%.2f%%)' % (i, len(dataloader), i * 100 / len(dataloader)), end="\r")
 
         # images = data[1].cuda()
         meta_data, images, imu_data, prev_state, T_imu_cam, gt_poses, gt_rel_poses = data
 
-        lstm_states = lstm_states if prop_lstm_states else None
+        # lstm_states = lstm_states if prop_lstm_states else None
         # we only care about the results from the VO front ends here
-        vis_meas, vis_meas_covar, lstm_states, _, _, _ = model.forward(images.cuda(),
+        vis_meas, vis_meas_covar, _, _, _ = model.forward(images.cuda(),
                                                                        imu_data.cuda(),
-                                                                       lstm_states,
                                                                        gt_poses[:, 0].inverse().cuda(),
                                                                        prev_state.cuda(), None,
                                                                        T_imu_cam.cuda())
 
-        lstm_states = lstm_states.detach()
         vis_meas = vis_meas.detach().cpu().numpy()
         vis_meas_covar = vis_meas_covar.detach().cpu().numpy()
 
@@ -53,7 +51,7 @@ def gen_trajectory_abs_iter(model, dataloaders):
     est_covars_dict = {k: [] for k in dataloaders.keys()}
     est_vis_meas_dict = {k: [] for k in dataloaders.keys()}
     vis_meas_covar_dict = {k: [] for k in dataloaders.keys()}
-    lstm_states_dict = dict.fromkeys(dataloaders.keys())
+    # lstm_states_dict = dict.fromkeys(dataloaders.keys())
 
     max_length = max([len(dataloaders[k]) for k in dataloaders])
     data_loader_iter = {k: iter(v) for k, v in dataloaders.items()}
@@ -75,15 +73,15 @@ def gen_trajectory_abs_iter(model, dataloaders):
             prev_pose = torch.stack([torch.tensor(est_poses_dict[k][-1]) for k in data_keys]).cuda()
             prev_state = torch.stack([torch.tensor(est_states_dict[k][-1]) for k in data_keys]).cuda()
             prev_covar = torch.stack([torch.tensor(est_covars_dict[k][-1]) for k in data_keys]).cuda()
-            lstm_states = torch.stack([lstm_states_dict[k] for k in data_keys])
+            # lstm_states = torch.stack([lstm_states_dict[k] for k in data_keys])
         else:
             prev_pose = torch.stack([torch.squeeze(d[5], 0) for d in data_list])[:, 0].inverse().cuda()
             prev_state = torch.stack([torch.squeeze(d[3], 0) for d in data_list]).cuda()
             prev_covar = None
-            lstm_states = None
+            # lstm_states = None
 
-        vis_meas, vis_meas_covar, lstm_states, est_poses, est_ekf_states, est_ekf_covars = \
-            model.forward(images, imu_data, lstm_states, prev_pose, prev_state, prev_covar, T_imu_cam)
+        vis_meas, vis_meas_covar,  est_poses, est_ekf_states, est_ekf_covars = \
+            model.forward(images, imu_data, prev_pose, prev_state, prev_covar, T_imu_cam)
 
         for j, k in enumerate(data):
             # if it is the first estimate, include the initial pose as well, otherwise just 1: onwards
@@ -94,7 +92,7 @@ def gen_trajectory_abs_iter(model, dataloaders):
 
             est_vis_meas_dict[k] += list(vis_meas[j].detach().cpu().numpy())
             vis_meas_covar_dict[k] += list(vis_meas_covar[j].detach().cpu().numpy())
-            lstm_states_dict[k] = lstm_states[j].detach()
+            # lstm_states_dict[k] = lstm_states[j].detach()
 
     return est_vis_meas_dict, vis_meas_covar_dict, est_poses_dict, est_states_dict, est_covars_dict
 

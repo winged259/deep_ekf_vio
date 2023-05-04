@@ -73,53 +73,51 @@ class _TrainAssistant(object):
         self.num_train_iterations = 0
         self.num_val_iterations = 0
         self.clip = par.clip
-        self.lstm_state_cache = {}
+        # self.lstm_state_cache = {}
         self.epoch = 0
 
-    def update_lstm_state(self, t_x_meta, lstm_states):
-        # lstm_states has the dimension of (# batch, 2 (hidden/cell), lstm layers, lstm hidden size)
-        _, seq_list, type_list, _, id_next_list, invalid_imu_list = SubseqDataset.decode_batch_meta_info(t_x_meta)
-        assert (len(seq_list) == lstm_states.size(0) and len(seq_list) == lstm_states.size(0))
-        num_batches = len(seq_list)
+    # def update_lstm_state(self, t_x_meta, lstm_states):
+    #     # lstm_states has the dimension of (# batch, 2 (hidden/cell), lstm layers, lstm hidden size)
+    #     _, seq_list, type_list, _, id_next_list, invalid_imu_list = SubseqDataset.decode_batch_meta_info(t_x_meta)
+    #     assert (len(seq_list) == lstm_states.size(0) and len(seq_list) == lstm_states.size(0))
+    #     num_batches = len(seq_list)
 
-        for i in range(0, num_batches):
-            key = "%s_%s_%d" % (seq_list[i], type_list[i], id_next_list[i])
-            self.lstm_state_cache[key] = lstm_states[i, :, :, :]
+    #     for i in range(0, num_batches):
+    #         key = "%s_%s_%d" % (seq_list[i], type_list[i], id_next_list[i])
+    #         self.lstm_state_cache[key] = lstm_states[i, :, :, :]
 
-    def retrieve_lstm_state(self, t_x_meta):
-        _, seq_list, type_list, id_list, id_next_list, invalid_imu_list = SubseqDataset.decode_batch_meta_info(t_x_meta)
-        num_batches = len(seq_list)
+    # def retrieve_lstm_state(self, t_x_meta):
+        # _, seq_list, type_list, id_list, id_next_list, invalid_imu_list = SubseqDataset.decode_batch_meta_info(t_x_meta)
+        # num_batches = len(seq_list)
 
-        lstm_states = []
+        # lstm_states = []
 
-        for i in range(0, num_batches):
-            key = "%s_%s_%d" % (seq_list[i], type_list[i], id_list[i])
-            if key in self.lstm_state_cache:
-                tmp = self.lstm_state_cache[key]
-            else:
-                # This assert only checks "vanilla" sequences for now
-                assert (not (self.epoch > 0 and id_list[i] >= par.seq_len - 1 and id_next_list[i] > id_list[i]))
-                num_layers = par.rnn_num_layers
-                hidden_size = par.rnn_hidden_size
-                tmp = torch.zeros(2, num_layers, hidden_size)
-            lstm_states.append(tmp)
+        # for i in range(0, num_batches):
+        #     key = "%s_%s_%d" % (seq_list[i], type_list[i], id_list[i])
+        #     if key in self.lstm_state_cache:
+        #         tmp = self.lstm_state_cache[key]
+        #     else:
+        #         # This assert only checks "vanilla" sequences for now
+        #         assert (not (self.epoch > 0 and id_list[i] >= par.seq_len - 1 and id_next_list[i] > id_list[i]))
+        #         num_layers = par.rnn_num_layers
+        #         hidden_size = par.rnn_hidden_size
+        #         tmp = torch.zeros(2, num_layers, hidden_size)
+        #     lstm_states.append(tmp)
 
-        return torch.stack(lstm_states, dim=0)
+        # return torch.stack(lstm_states, dim=0)
 
     def get_loss(self, data):
         meta_data, images, imu_data, prev_state, T_imu_cam, gt_poses, gt_rel_poses = data
 
         _, _, _, _, _, invalid_imu_list = SubseqDataset.decode_batch_meta_info(meta_data)
 
-        prev_lstm_states = None
-        if par.stateful_training:
-            prev_lstm_states = self.retrieve_lstm_state(meta_data)
-            prev_lstm_states = prev_lstm_states.cuda()
+        # if par.stateful_training:
+        #     prev_lstm_states = self.retrieve_lstm_state(meta_data)
+        #     prev_lstm_states = prev_lstm_states.cuda()
 
-        vis_meas, vis_meas_covar, lstm_states, poses, ekf_states, ekf_covars = \
+        vis_meas, vis_meas_covar,poses, ekf_states, ekf_covars = \
             self.model.forward(images.cuda(),
                                imu_data.cuda(),
-                               prev_lstm_states,
                                gt_poses[:, 0].inverse().cuda(),
                                prev_state.cuda(), None,
                                T_imu_cam.cuda())
@@ -142,9 +140,9 @@ class _TrainAssistant(object):
         else:
             loss = self.vis_meas_loss(vis_meas, vis_meas_covar, gt_rel_poses.cuda())
 
-        if par.stateful_training:
-            lstm_states = lstm_states.detach().cpu()
-            self.update_lstm_state(meta_data, lstm_states)
+        # if par.stateful_training:
+        #     lstm_states = lstm_states.detach().cpu()
+        #     self.update_lstm_state(meta_data, lstm_states)
 
         if self.model.training:
             self.num_train_iterations += 1
@@ -320,8 +318,8 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     logger.print("Train description: ", train_description)
     logger.tensorboard.add_text("description", train_description)
 
-    logger.log_parameters()
-    logger.log_source_files()
+    # logger.log_parameters()
+    # logger.log_source_files()
 
     # Prepare Data
     train_subseqs = get_subseqs(par.train_seqs, par.seq_len, overlap=1, sample_times=par.sample_times, training=True)
@@ -342,6 +340,9 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
 
     # Model
     e2e_vio_model = E2EVIO()
+    # pytorch_total_params = sum(p.numel() for p in e2e_vio_model.parameters())
+    # print(pytorch_total_params)
+    # return
     e2e_vio_model = e2e_vio_model.cuda()
     online_evaluator = _OnlineDatasetEvaluator(e2e_vio_model, par.valid_seqs, 50)
 
@@ -382,14 +383,11 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
         state_dict_update = {key: state_dict_update[key] for key in state_dict_update
                              if key not in par.exclude_resume_weights}
         state_dict = e2e_vio_model.state_dict()
-        state_dict_update = {k: v for k, v in state_dict_update.items() if k in state_dict}
-        state_dict.update(state_dict_update)
+        update_state_dict = {k: v for k, v in state_dict_update.items() if k in state_dict}
+        assert (len(update_state_dict) > 0)
+        state_dict.update(update_state_dict)
         e2e_vio_model.load_state_dict(state_dict)
         logger.print('Load model from: %s' % resume_model_path)
-        if resume_optimizer_path:
-            optimizer.load_state_dict(torch.load(resume_optimizer_path))
-            logger.print('Load optimizer from: %s' % resume_optimizer_path)
-
     # if to use more than one GPU
     if par.n_gpu > 1:
         assert (torch.cuda.device_count() == par.n_gpu)

@@ -23,7 +23,7 @@ for i=1:length(oxts)
   end
 
   % translation vector
-  [t(1,1) t(2,1)] = latlonToMercator(oxts{i}(1),oxts{i}(2),scale);
+  [t(1,1), t(2,1)] = latlonToMercator(oxts{i}(1),oxts{i}(2),scale);
   t(3,1) = oxts{i}(3);
 
   % rotation matrix (OXTS RT3000 user manual, page 71/92)
@@ -41,5 +41,6 @@ for i=1:length(oxts)
   end
       
   % add pose
-  pose{i} = Tr_0_inv*[R t;0 0 0 1];
+  % pose{i} = Tr_0_inv*[R t;0 0 0 1];
+  pose(:, :, i) = Tr_0_inv * [R t;0 0 0 1];
 end

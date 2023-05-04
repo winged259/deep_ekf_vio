@@ -317,19 +317,17 @@ class Interpolation(nn.Module):
             for _ in range(n_resgroups)]
         self.body = nn.Sequential(*modules_body)
 
-        self.tailConv = conv3x3(n_feats, n_feats)
+        # self.tailConv = conv3x3(n_feats, n_feats)
 
     def forward(self, x0, x1):
         # Build input tensor
         x = torch.cat((x0, x1), dim=1)
         # print(x.shape)
         x = self.headConv(x)
-
-        # res = self.body(x)
-        # res += x
-
-        x = self.tailConv(x)
-        return x
+        res = self.body(x)
+        res += x
+        # x = self.tailConv(x)
+        return res
 
 
 class Interpolation_res(nn.Module):
