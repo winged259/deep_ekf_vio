@@ -100,16 +100,9 @@ class Parameters(object):
         # './pretrained/flownets_bn_EPE2.459.pth.tar'
         # './pretrained/flownets_EPE1.951.pth.tar'
 
+        
+        self.craft = True
 
-        #Added
-        self.num_t_encoder_layers = 3
-        self.num_t_decoder_layers = 3
-        self.num_rot_encoder_layers = 2
-        self.num_rot_decoder_layers = 2
-        self.hidden_dim = 256
-        self.reduction = ["reduction_4", "reduction_3"]
-        self.dim_feedforward = 256
-        self.learn_embedding_with_pose_token = False
         # self.use_lstm = True
 
 
