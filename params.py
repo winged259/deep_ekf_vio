@@ -61,7 +61,7 @@ class Parameters(object):
         self.stateful_training = True
 
         # EKF parameters
-        self.enable_ekf = False
+        self.enable_ekf = True
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
@@ -71,7 +71,7 @@ class Parameters(object):
 
         # Training parameters
         self.epochs = 50
-        self.batch_size = 32
+        self.batch_size = 16
         self.pin_mem = True
         self.cache_image = True
         self.optimizer = torch.optim.Adam
@@ -138,9 +138,9 @@ class KITTIParams(Parameters):
         self.all_seqs = self.wc(['K00_*', 'K01', 'K02_*', 'K04', 'K05_*', 'K06', 'K07', 'K08', 'K09', 'K10'])
         self.eval_seq = "K07"
 
-        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
         # self.train_seqs = ['K04','K08','K09','K10']
-        self.train_seqs = ['K04']
+        # self.train_seqs = ['K04']
         self.valid_seqs = [self.eval_seq]
 
         # self.train_seqs = self.wc(['K00_*', 'K01', 'K02_*', 'K05_*', 'K08', 'K09'])

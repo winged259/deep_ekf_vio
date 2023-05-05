@@ -203,7 +203,7 @@ class ResidualGroup(nn.Module):
 
     def forward(self, x):
         res = self.body(x)
-        res += x
+        # res += x
         return res
 
 
@@ -374,7 +374,7 @@ class Interpolation(nn.Module):
         x = self.headConv(x)
 
         res = self.body(x)
-        res += x
+        # res += x
         # x = self.tailConv(x)
         return res
 
@@ -394,9 +394,9 @@ class Interpolation_res(nn.Module):
 
         self.tailConv = conv3x3(n_feats, n_feats)
 
-    def forward(self, x0, x1, x2):
+    def forward(self, x0, x1, ):
         # Build input tensor
-        x = torch.cat([x0, x1, x2], dim=1)
+        x = torch.cat([x0, x1], dim=1)
         x = self.headConv(x)
 
         res = x
