@@ -1,23 +1,16 @@
 import numpy as np
 
 import torch
+from torch import sigmoid
 import torch.nn as nn
 import torch.nn.functional as F
 from params import par
 import torchvision.models as models
 from torchvision.models import ResNet18_Weights
-from .common import *
+from torchvision.models.optical_flow import raft_large, Raft_Large_Weights
+from torch.nn.init import kaiming_normal_, constant_
 
-def conv3x3(in_channels, out_channels, stride=1, 
-            padding=1, bias=True, groups=1):    
-    return nn.Conv2d(
-        in_channels,
-        out_channels,
-        kernel_size=3,
-        stride=stride,
-        padding=padding,
-        bias=bias,
-        groups=groups)
+
 def linear(in_planes, out_planes):
     return nn.Sequential(
         nn.Linear(in_planes, out_planes), 
@@ -28,7 +21,8 @@ def conv(in_planes, out_planes, kernel_size=3, stride=2, padding=1, dilation=1, 
         return nn.Sequential(
             nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, padding=padding, stride=stride, dilation=dilation, bias=bias),
             nn.BatchNorm2d(out_planes),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.2)
         )
     else: 
         return nn.Sequential(
@@ -36,32 +30,37 @@ def conv(in_planes, out_planes, kernel_size=3, stride=2, padding=1, dilation=1, 
             nn.ReLU(inplace=True)
         )
 
-class AttentionBlock(nn.Module):
-    def __init__(self, in_channels):
-        super(AttentionBlock, self).__init__()
-        self.g = nn.Linear(in_channels, in_channels // 8)
-        self.theta = nn.Linear(in_channels, in_channels // 8)
-        self.phi = nn.Linear(in_channels, in_channels // 8)
+def convx(batchNorm, in_planes, out_planes, kernel_size=3, stride=1, dropout=0):
+    if batchNorm:
+        return nn.Sequential(
+                nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                          bias=False),
+                nn.BatchNorm2d(out_planes),
+                nn.LeakyReLU(0.1, inplace=True),
+                nn.Dropout(dropout)  # , inplace=True)
+        )
+    else:
+        return nn.Sequential(
+                nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                          bias=True),
+                nn.LeakyReLU(0.1, inplace=True),
+                nn.Dropout(dropout)  # , inplace=True)
+        )
+def predict_flow(in_planes):
+    return nn.Conv2d(in_planes,2,kernel_size=3,stride=1,padding=1,bias=False)
+def crop_like(input, target):
+    if input.size()[2:] == target.size()[2:]:
+        return input
+    else:
+        return input[:, :, :target.size(2), :target.size(3)]
 
-        self.W = nn.Linear(in_channels // 8, in_channels)
 
-    def forward(self, x):
-        batch_size = x.size(0)
-        out_channels = x.size(1)
+def deconv(in_planes, out_planes):
+    return nn.Sequential(
+        nn.ConvTranspose2d(in_planes, out_planes, kernel_size=4, stride=2, padding=1, bias=False),
+        nn.LeakyReLU(0.1,inplace=True)
+    )
 
-        g_x = self.g(x).view(batch_size, out_channels // 8, 1)
-
-        theta_x = self.theta(x).view(batch_size, out_channels // 8, 1)
-        theta_x = theta_x.permute(0, 2, 1)
-        phi_x = self.phi(x).view(batch_size, out_channels // 8, 1)
-        f = torch.matmul(phi_x, theta_x)
-        f_div_C = F.softmax(f, dim=-1)
-
-        y = torch.matmul(f_div_C, g_x)
-        y = y.view(batch_size, out_channels // 8)
-        W_y = self.W(y)
-        z = W_y + x
-        return z
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -102,7 +101,7 @@ class Reg(nn.Module):
         self.layer3 = self._make_layer(BasicBlock, outputnums[4], blocknums[4], 2, 1, 1) # 10 x 7
         self.layer4 = self._make_layer(BasicBlock, outputnums[5], blocknums[5], 2, 1, 1) # 5 x 4
         self.layer5 = self._make_layer(BasicBlock, outputnums[6], blocknums[6], 2, 1, 1) # 3 x 2
-        fcnum = outputnums[6] * 10
+        fcnum = outputnums[6] * 12
         fc1_trans = linear(fcnum, 128)
         fc2_trans = linear(128,32)
         fc3_trans = nn.Linear(32,3)
@@ -157,38 +156,93 @@ class Reg(nn.Module):
         out = torch.cat((trans,rot, covar_t), dim=1)
         return out
 
-class NewNet(nn.Module):
-    def __init__(self, feature_extractor, regressor , feat_dim=1024):
-        super().__init__()
-        self.feature_extractor = feature_extractor
-        # for param in self.feature_extractor.parameters():
-        #     param.requires_grad = False
-        # fe_out_planes = self.feature_extractor.fc.in_features
-        # self.feature_extractor.fc = nn.Linear(fe_out_planes, feat_dim //2)
-
-        # self.att = AttentionBlock(feat_dim)
-        self.regressor = regressor
-    
-    def forward(self,x1, x2):
-
-        x = self.feature_extractor(x1,x2)
-        
-        x = x[-1]
-        # x = torch.cat((x1,x2), dim=1)
-        x = self.regressor(x)
-       
-        return x
-
-class DepthNet(nn.Module):
+class RAFT(nn.Module):
     def __init__(self):
         super().__init__()
-        raise NotImplementedError
+        self.model = raft_large(weights=Raft_Large_Weights.DEFAULT)
+        
     def forward(self, x):
-        raise NotImplementedError
+        x1 = x[:,0:3,:]
+        x2 = x[:,3:6,:]
+        res = self.model(x1,x2)
+        return res
+    
+class FlowNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.deconv5 = deconv(1024,512)
+        self.deconv4 = deconv(1026,256)
+        self.deconv3 = deconv(514,128)
+        self.deconv2 = deconv(258,64)
+        self.deconv1 = deconv(130,32)
+
+        self.predict_flow6 = predict_flow(1024)
+        self.predict_flow5 = predict_flow(1026)
+        self.predict_flow4 = predict_flow(514)
+        self.predict_flow3 = predict_flow(258)
+        self.predict_flow2 = predict_flow(130)
+        self.predict_flow1 = predict_flow(40)
+        
+
+        self.upsampled_flow6_to_5 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
+        self.upsampled_flow5_to_4 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
+        self.upsampled_flow4_to_3 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
+        self.upsampled_flow3_to_2 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
+        self.upsampled_flow2_to_1 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
+        self.upsampled_flow1_to_0 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+                kaiming_normal_(m.weight, 0.1)
+                if m.bias is not None:
+                    constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                constant_(m.weight, 1)
+                constant_(m.bias, 0)
+    def forward(self, features):
+        flow6       = self.predict_flow6(features[-1])
+        flow6_up    = crop_like(self.upsampled_flow6_to_5(flow6), features[-2])
+        out_deconv5 = crop_like(self.deconv5(features[-1]), features[-2])
+
+        concat5 = torch.cat((features[-2],out_deconv5,flow6_up),1)
+        flow5       = self.predict_flow5(concat5)
+        flow5_up    = crop_like(self.upsampled_flow5_to_4(flow5), features[-3])
+        out_deconv4 = crop_like(self.deconv4(concat5), features[-3])
+
+        concat4 = torch.cat((features[-3],out_deconv4,flow5_up),1)
+        flow4       = self.predict_flow4(concat4)
+        flow4_up    = crop_like(self.upsampled_flow4_to_3(flow4), features[-4])
+        out_deconv3 = crop_like(self.deconv3(concat4), features[-4])
+
+        concat3 = torch.cat((features[-4],out_deconv3,flow4_up),1)
+        flow3       = self.predict_flow3(concat3)
+        flow3_up    = crop_like(self.upsampled_flow3_to_2(flow3), features[-5])
+        out_deconv2 = crop_like(self.deconv2(concat3), features[-5])
+
+        concat2 = torch.cat((features[-5],out_deconv2,flow3_up),1)
+        flow2       = self.predict_flow2(concat2)
+        flow2_up    = crop_like(self.upsampled_flow2_to_1(flow2), features[-6])
+        out_deconv1 = crop_like(self.deconv1(concat2), features[-6])
+
+        concat1 = torch.cat((features[-6],out_deconv1,flow2_up),1)
+        flow1       = self.predict_flow1(concat1)
+        return flow1
 
 
-if __name__ == '__main__':
-    feature_extractor = models.resnet18(weights=ResNet18_Weights.DEFAULT)
-    for param in feature_extractor.parameters():
-        param.requires_grad = False
-    model = NewNet(feature_extractor, pretrained=True)
+if __name__ == "__main__":
+    import torchvision
+    import torchvision.transforms.functional as TF
+    import matplotlib.pyplot as plt
+    import flow_vis
+    img1 = '/mnt/data/teamAI/duy/data/kitti/2011_10_03/2011_10_03_drive_0027_extract/image_02/data/0000000000.png'
+    img2 = '/mnt/data/teamAI/duy/data/kitti/2011_10_03/2011_10_03_drive_0027_extract/image_02/data/0000000001.png'
+    i1 = torchvision.io.read_image(img1).float()
+    i2 = torchvision.io.read_image(img2).float()
+    i = torch.cat((i1, i2), dim=0).unsqueeze(0)
+    # print(i.shape)
+    raft = RAFT()
+    # print(sum([np.prod(p.size()) for p in raft.parameters()]))
+    out = raft(i)
+    for d,i in enumerate(out):
+        i = i.squeeze(0)
+        flow_color = flow_vis.flow_to_color(i.permute(1,2,0).detach().numpy(), convert_to_bgr=False)
+        plt.imsave(f"{d}.png", flow_color)

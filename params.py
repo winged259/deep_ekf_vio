@@ -42,7 +42,7 @@ class Parameters(object):
         self.results_dir = os.path.join(self.results_coll_dir,
                                         "train" + "_%s" % self.timestamp.strftime('%Y%m%d-%H-%M-%S'))
 
-        self.seq_len = 5
+        self.seq_len = 9
         self.sample_times = 1
 
         self.exclude_resume_weights = ["imu_noise_covar_weights", "init_covar_diag_sqrt"]
@@ -61,7 +61,7 @@ class Parameters(object):
         self.stateful_training = True
 
         # EKF parameters
-        self.enable_ekf = True
+        self.enable_ekf = False
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
@@ -70,7 +70,7 @@ class Parameters(object):
         self.vis_meas_covar_use_fixed = False
 
         # Training parameters
-        self.epochs = 50
+        self.epochs = 60
         self.batch_size = 16
         self.pin_mem = True
         self.cache_image = True
@@ -131,8 +131,8 @@ class KITTIParams(Parameters):
         self.train_seqs = ['K00_5']
         self.valid_seqs = ['K00_6']
 
-        self.img_w = 312
-        self.img_h = 96
+        self.img_w = 384
+        self.img_h = 128
         self.img_means = (-0.138843, -0.119405, -0.123209)
         self.img_stds = (1, 1, 1)
         self.minus_point_5 = True
@@ -166,9 +166,9 @@ class KITTIParams(Parameters):
         }
         # error scale for covar loss, not really used,
         # but must be 1.0 for self.gaussian_pdf_loss = False
-        self.k4 = 1.0
+        self.k4 = 100.0
 
-        self.gaussian_pdf_loss = False
+        self.gaussian_pdf_loss = True
 
         self.data_aug_transforms = AttrDict({
             "enable": False,

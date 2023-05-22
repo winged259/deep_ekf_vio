@@ -54,6 +54,13 @@ def line2mat(line_data):
     mat = np.eye(4)
     mat[0:3,:] = line_data.reshape(3,4)
     return np.matrix(mat)
+def mat2line(mat_data):
+    '''
+    4 x 4 -> 12
+    '''
+    line_data = np.zeros(12)
+    line_data[:]=mat_data[:3,:].reshape((12))
+    return line_data
 def pose2motion(data, skip=0):
     '''
     data: N x 12
@@ -68,3 +75,32 @@ def pose2motion(data, skip=0):
         motion_line = np.array(motion[0:3,:]).reshape(1,12)
         all_motion[i,:] = motion_line
     return all_motion
+def line2mat(line_data):
+    '''
+    12 -> 4 x 4
+    '''
+    mat = np.eye(4)
+    mat[0:3,:] = line_data.reshape(3,4)
+    return np.matrix(mat)
+def ses2SEs(data):
+    '''
+    data: N x 6
+    SEs: N x 12
+    '''
+    data_size = data.shape[0]
+    SEs = np.zeros((data_size,12))
+    for i in range(0,data_size):
+        SEs[i,:] = mat2line(se2SE(data[i]))
+    return SEs
+def so2SO(so_data):
+    return R.from_rotvec(so_data).as_matrix()
+def se2SE(se_data):
+    '''
+    6 -> 4 x 4
+    '''
+    result_mat = np.matrix(np.eye(4))
+    result_mat[0:3,0:3] = so2SO(se_data[3:6])
+    result_mat[0:3,3]   = np.matrix(se_data[0:3]).T
+    return result_mat
+def se2SEx(se_data):
+    return line2mat(ses2SEs(se_data))

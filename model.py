@@ -3,15 +3,11 @@ import torch.nn as nn
 import numpy as np
 import data_loader
 import torch_se3
-import time
 from params import par
-from torch.autograd import Variable
-from torch.nn.init import kaiming_normal_, orthogonal_
-from backmodel.tnet import TNet
-from backmodel.cain import CAIN
-from backmodel.newnet import NewNet, Reg, DepthNet
-from torchvision.models import resnet18, ResNet18_Weights
-from torchvision.models.optical_flow import raft_large, Raft_Large_Weights
+from backmodel.newnet import RAFT, Reg, FlowNet
+from backmodel.depth import DispResNet, ResnetEncoder
+from backmodel.flow import PFlowNet
+from backmodel.unimatch.unimatch import UniMatch
 
 def conv(batchNorm, in_planes, out_planes, kernel_size=3, stride=1, dropout=0):
     if batchNorm:
@@ -282,30 +278,46 @@ class IMUKalmanFilter(nn.Module):
 
 
 class DeepVO(nn.Module):
-    def __init__(self, imsize1, imsize2, batchNorm):
+    def __init__(self):
         super(DeepVO, self).__init__()
-        # self.tnet = TNet(pretrained_path=par.pretrained_backbone)
-        # self.cain = CAIN()
-        # extractor = resnet18(weights=ResNet18_Weights.DEFAULT)
-        extractor = raft_large(weights=Raft_Large_Weights.DEFAULT).cuda()
-        regressor = Reg()
-        # for param in extractor.parameters():
-        #     param.requires_grad = False
-        self.newnet = NewNet(feature_extractor=extractor, regressor=regressor)
+        # self.extractor = ResnetEncoder(num_layers=18, num_input_images=1)
+        # self.bottleneck = Bottleneck()
+        # self.intrinsic_head = IntrinsicHead()
+        # self.intrinsic_head = torch.rand(par.batch_size*(par.seq_len-1),3,3)
+        self.flow = RAFT()
+        # self.depth = DispResNet(num_ch_enc=self.extractor.num_ch_enc)
+        self.regressor = Reg(inputnum=2)
+
+        # self.newnet = NewNet(feature_extractor=extractor, regressor=regressor)
 
     def encode_image(self, x):
         # x: (batch, seq_len, channel, width, height)
 
         # stack_image
-        x = torch.cat((x[:, :-1], x[:, 1:]), dim=2)
-        batch_size = x.size(0)
-        seq_len = x.size(1)
-        # CNN
-        x = x.view(batch_size * seq_len, x.size(2), x.size(3), x.size(4))
-        x = self.newnet(x[:,0:3,:],x[:,3:6,:])
-        x = x.reshape(batch_size, seq_len, -1)
-        return x
+        img_stacked = torch.cat((x[:, :-1], x[:, 1:]), dim=2)
+        batch_size = img_stacked.size(0)
+        seq_len = img_stacked.size(1)
 
+        x = img_stacked.view(batch_size * seq_len, img_stacked.size(2), img_stacked.size(3), img_stacked.size(4))
+        # start encode 
+        # feat1 = self.extractor(x[:,0:3,:])
+        # feat2 = self.extractor(x[:,3:,:])
+        # intrinsic_pred = self.intrinsic_head(feat1[0], par.img_h, par.img_w)
+        
+        flow = self.flow(x)
+        # input_pose = []
+        # for f, d in zip(flow,d2):
+        #     ip = torch.cat((f,d), dim=1)
+        #     input_pose.append(ip)
+            # pose = self.regressor(input_pose, (input_pose.size(2), input_pose.size(3))) # n x 3 x h x w
+        # x = self.regressor(input_pose[0])
+        # x = self.regressor(flow[0])
+        x = self.regressor(flow[-1])
+        # x = self.regressor(torch.cat((flow, d2), dim=1))
+        # x = self.newnet(x[:,0:3,:],x[:,3:6,:])
+        x = x.reshape(batch_size, seq_len, -1)
+        # return x, d2[0], intrinsic_pred
+        return x
     def weight_parameters(self):
         return [param for name, param in self.named_parameters() if 'weight' in name]
 
@@ -317,7 +329,7 @@ class E2EVIO(nn.Module):
     def __init__(self):
         super(E2EVIO, self).__init__()
 
-        self.vo_module = DeepVO(par.img_h, par.img_w, par.batch_norm)
+        self.vo_module = DeepVO()
 
         self.imu_noise_covar_weights = torch.nn.Linear(1, 4, bias=False)
         if not par.train_imu_noise_covar:
@@ -410,7 +422,6 @@ class E2EVIO(nn.Module):
             covars_over_timesteps.append(new_covar)
             vis_meas_over_timesteps.append(vis_meas)
             vis_meas_covar_over_timesteps.append(vis_meas_covar)
-
         return torch.stack(vis_meas_over_timesteps, 1), \
                torch.stack(vis_meas_covar_over_timesteps, 1), \
                torch.stack(poses_over_timesteps, 1), \

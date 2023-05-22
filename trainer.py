@@ -13,7 +13,7 @@ from log import logger
 from torch.utils.data import DataLoader
 from eval import EurocErrorCalc, KittiErrorCalc
 from eval.gen_trajectory import gen_trajectory_rel_iter, gen_trajectory_abs_iter
-from new_loss import *
+from new_loss import photometric_reconstruction_loss, smooth_loss
 
 
 class _OnlineDatasetEvaluator(object):
@@ -80,9 +80,8 @@ class _TrainAssistant(object):
 
     def get_loss(self, data):
         meta_data, images, imu_data, prev_state, T_imu_cam, gt_poses, gt_rel_poses = data
-
+        img_stacked = torch.cat((images[:, :-1], images[:, 1:]), dim=2).cuda()
         _, _, _, _, _, invalid_imu_list = SubseqDataset.decode_batch_meta_info(meta_data)
-
 
         vis_meas, vis_meas_covar, poses, ekf_states, ekf_covars = \
             self.model.forward(images.cuda(),
@@ -108,34 +107,30 @@ class _TrainAssistant(object):
             loss, _, _ = self.ekf_loss(poses, gt_poses.cuda(), ekf_states, gt_rel_poses.cuda(), vis_meas, vis_meas_covar)
         else:
             loss = self.vis_meas_loss(vis_meas, vis_meas_covar, gt_rel_poses.cuda())
-
+        # photo_loss, _ = photometric_reconstruction_loss(tgt_img=img_stacked[:,:,3:6,:,:], ref_img=img_stacked[:,:,:3,:,:],depth=depth.cuda(),pose=vis_meas,intrinsics=intrinsic_pred.cuda())
+        # dep_smooth_loss = smooth_loss(depth.cuda())
 
         if self.model.training:
             self.num_train_iterations += 1
         else:
             self.num_val_iterations += 1
 
+        # return loss+photo_loss+dep_smooth_loss
         return loss
-    
-    def fit_scale(Ps, Gs):
-        b = Ps.shape[0]
-        t1 = Ps.data[...,:3].detach().reshape(b, -1)
-        t2 = Gs.data[...,:3].detach().reshape(b, -1)
-
-        s = (t1*t2).sum(-1) / ((t2*t2).sum(-1) + 1e-8)
-        return s
 
     def vis_meas_loss(self, predicted_rel_poses, vis_meas_covar, gt_rel_poses):
         # Weighted MSE Loss
         # angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
-        trans_scaled_pred = predicted_rel_poses[:,:,3:6]/(torch.linalg.norm(predicted_rel_poses[:,:,3:6], dim=2,  ord = 2)
-                                                          .view(predicted_rel_poses.shape[0],predicted_rel_poses.shape[1],1))
-        trans_scaled_gt = gt_rel_poses[:,:,3:6]/(torch.linalg.norm(gt_rel_poses[:,:,3:6], dim=2,  ord = 2)
-                                                 .view(gt_rel_poses.shape[0],gt_rel_poses.shape[1],1))
+        # trans_scaled_pred = predicted_rel_poses[:,:,3:6]/(torch.linalg.norm(predicted_rel_poses[:,:,3:6], dim=2,  ord = 2)
+        #                                                   .view(predicted_rel_poses.shape[0],predicted_rel_poses.shape[1],1))
+        # trans_scaled_gt = gt_rel_poses[:,:,3:6]/(torch.linalg.norm(gt_rel_poses[:,:,3:6], dim=2,  ord = 2)
+        #                                          .view(gt_rel_poses.shape[0],gt_rel_poses.shape[1],1))
         
         # trans_loss = self.criterion(trans_scaled_pred, trans_scaled_gt)
         trans_loss = self.criterion(predicted_rel_poses[:,:,3:6],gt_rel_poses[:,:,3:6])
+        # print(trans_loss)
+        # trans_loss = scale_loss(predicted_rel_poses[:,:,3:6],gt_rel_poses[:,:,3:6], gamma=0.9)
         angle_loss = self.criterion(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # covar_loss = torch.mean(vis_meas_covar)
 
@@ -202,9 +197,12 @@ class _TrainAssistant(object):
         # abs_angle_errors_sq = torch.sum(abs_angle_errors ** 2, dim=-1)  # norm squared
 
         abs_trans_errors_sq = torch.sum((abs_errors[:, :, 0:3, 3] / length_div) ** 2, dim=-1)
-
+        abs_trans_errors = torch.sum((abs_errors[:, :, 0:3, 3] / length_div), dim=-1)
+        abs_angle_errors = torch.sum(torch.sqrt(torch.diagonal(I_minus_angle_errors_sq, dim1=-2, dim2=-1)), dim=-1)
         abs_angle_loss = torch.mean(abs_angle_errors_sq)
         abs_trans_loss = torch.mean(abs_trans_errors_sq)
+        # abs_angle_loss = torch.mean(abs_angle_errors)
+        # abs_trans_loss = torch.mean(abs_trans_errors)
 
         # _, C_rel, r_rel, _, _, _ = IMUKalmanFilter.decode_state_b(ekf_states)
         # rel_angle_errors = (gt_rel_poses[:, :, 0:3] - torch.squeeze(torch_se3.log_SO3_b(C_rel[:, 1:]), -1)) ** 2
@@ -326,9 +324,9 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     e2e_vio_model = E2EVIO()
     e2e_vio_model = e2e_vio_model.cuda()
     # for param in e2e_vio_model.parameters():
-    #     param.requires_grad = False
-    # for param in e2e_vio_model.vo_module.newnet.feature_extractor.parameters():
-    #     param.requires_grad = False
+    #     param.requires_grad = True
+    for param in e2e_vio_model.vo_module.flow.parameters():
+        param.requires_grad = False
     online_evaluator = _OnlineDatasetEvaluator(e2e_vio_model, par.valid_seqs, 50)
 
     # Load FlowNet weights pretrained with FlyingChairs
