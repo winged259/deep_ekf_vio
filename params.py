@@ -42,7 +42,7 @@ class Parameters(object):
         self.results_dir = os.path.join(self.results_coll_dir,
                                         "train" + "_%s" % self.timestamp.strftime('%Y%m%d-%H-%M-%S'))
 
-        self.seq_len = 8
+        self.seq_len = 9
         self.sample_times = 3
 
         self.exclude_resume_weights = ["imu_noise_covar_weights", "init_covar_diag_sqrt"]
@@ -61,7 +61,7 @@ class Parameters(object):
         self.stateful_training = True
 
         # EKF parameters
-        self.enable_ekf = True
+        self.enable_ekf = False
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
@@ -70,7 +70,7 @@ class Parameters(object):
         self.vis_meas_covar_use_fixed = False
 
         # Training parameters
-        self.epochs = 200
+        self.epochs = 60
         self.batch_size = 8
         self.pin_mem = True
         self.cache_image = True
@@ -92,8 +92,8 @@ class Parameters(object):
             }
         })
         # Pretrain, Resume training
-        self.pretrained_flownet = os.path.join(self.project_dir, './pretrained/flownets_bn_EPE2.459.pth.tar')
-        self.pretrained_backbone = os.path.join(self.project_dir, './pretrained/efficient-net-b0.pth' )
+        # self.pretrained_flownet = os.path.join(self.project_dir, './pretrained/flownets_bn_EPE2.459.pth.tar')
+        self.pretrained_flownet  = None
         # Choice:
         # None
         # './pretrained/flownets_bn_EPE2.459.pth.tar'
@@ -136,13 +136,13 @@ class KITTIParams(Parameters):
         self.all_seqs = self.wc(['K00_*', 'K01', 'K02_*', 'K04', 'K05_*', 'K06', 'K07', 'K08', 'K09', 'K10'])
         self.eval_seq = "K07"
 
-        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
-        self.valid_seqs = [self.eval_seq]
+        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        # self.valid_seqs = [self.eval_seq]
 
         # self.train_seqs = self.wc(['K00_*', 'K01', 'K02_*', 'K05_*', 'K08', 'K09'])
         # self.valid_seqs = ['K04', 'K06', 'K07', 'K10']
-        # self.train_seqs = ['K08']
-        # self.valid_seqs = ['K07']
+        self.train_seqs = ['K00_6']
+        self.valid_seqs = ['K00_7']
 
         self.img_w = 320
         self.img_h = 96
@@ -258,5 +258,5 @@ class EUROCParams(Parameters):
         return "EUROC"
 
 
-# par = KITTIParams()
-par = EUROCParams()
+par = KITTIParams()
+# par = EUROCParams()
