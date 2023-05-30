@@ -231,12 +231,13 @@ class Test_EKF(unittest.TestCase):
                                                            torch.zeros(3),  # r
                                                            torch.tensor(gt_vels[i, 0], dtype=torch.float32),  # v
                                                            torch.zeros(3),  # bw
-                                                           torch.zeros(3)).to(device))  # ba
+                                                           torch.zeros(3),
+                                                           torch.tensor(3)).to(device))  # ba
         states = [torch.stack(init_state)]
         poses = [torch.tensor([np.linalg.inv(p[0]) for p in gt_poses], dtype=torch.float32).to(device)]
-        covars = [torch.zeros(timestamps.shape[0], 18, 18).to(device)]
+        covars = [torch.zeros(timestamps.shape[0], 19, 19).to(device)]
         imu_noise = torch.eye(12, 12).to(device)
-        precomp_covars = [torch.zeros(timestamps.shape[0], 18, 18).to(device)]
+        precomp_covars = [torch.zeros(timestamps.shape[0], 19, 19).to(device)]
 
         states[0].requires_grad = req_grad
         covars[0].requires_grad = req_grad
@@ -428,7 +429,7 @@ class Test_EKF(unittest.TestCase):
         init_covar[15:18, 15:18] = np.eye(3, 3) * 1e2  # ba
 
         timestamps, gt_poses, gt_vels, poses, states, covars = \
-            self.ekf_test_case(["K06"], [0, 1091, ], init_covar.reshape(1, 18, 18), imu_covar, vis_meas_covar, device,
+            self.ekf_test_case(["K06"], [0, 1091, ], init_covar.reshape(1, 19, 19), imu_covar, vis_meas_covar, device,
                                req_grad, accel_bias_inject=np.array([0.1, -0.2, 0.3]).reshape(1, 3))
         plot_ekf_data(os.path.join(output_dir, "K06_accel_bias"),
                       timestamps[0], gt_poses[0], gt_vels[0], poses[0], states[0])
@@ -580,12 +581,12 @@ class Test_EKF(unittest.TestCase):
 if __name__ == '__main__':
     # Test_EKF().test_predict_plotted()
     # Test_EKF().test_process_model_F_G_Q_covar()
-    Test_EKF().test_meas_jacobian_numerically_small_error()
-    Test_EKF().test_meas_jacobian_numerically()
+    # Test_EKF().test_meas_jacobian_numerically_small_error()
+    # Test_EKF().test_meas_jacobian_numerically()
     # Test_EKF().test_ekf_all_plotted()
     # Test_EKF().test_ekf_predict_cuda_graph()
     # Test_EKF().test_ekf_cuda_graph()
-    # Test_EKF().test_ekf_K06_with_artificial_biases_plotted()
+    Test_EKF().test_ekf_K06_with_artificial_biases_plotted()
     # Test_EKF().imu_predict_kitti()
     # Test_EKF().imu_predict_euroc()
     # unittest.main(verbosity=10)

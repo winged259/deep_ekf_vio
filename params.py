@@ -70,7 +70,7 @@ class Parameters(object):
         self.vis_meas_covar_use_fixed = False
 
         # Training parameters
-        self.epochs = 100
+        self.epochs = 50
         self.batch_size = 64
         self.pin_mem = True
         self.cache_image = True
@@ -125,11 +125,11 @@ class KITTIParams(Parameters):
         self.all_seqs = self.wc(['K00_*', 'K01', 'K02_*', 'K04', 'K05_*', 'K06', 'K07', 'K08', 'K09', 'K10'])
         self.eval_seq = 'K10'
 
-        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
-        self.valid_seqs = [self.eval_seq]
+        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        # self.valid_seqs = [self.eval_seq]
 
-        # self.train_seqs = ['K00_7']
-        # self.valid_seqs = ['K07']
+        self.train_seqs = ['K00_6']
+        self.valid_seqs = ['K07']
 
         self.img_w = 320
         self.img_h = 96
@@ -173,7 +173,7 @@ class KITTIParams(Parameters):
         self.gaussian_pdf_loss = False
 
         self.data_aug_transforms = AttrDict({
-            "enable": False,
+            "enable": True,
             "lr_flip": True,
             "ud_flip": False,
             "lrud_flip": False,

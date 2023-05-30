@@ -104,8 +104,8 @@ class _TrainAssistant(object):
             if np.any(s):
                 vis_meas_loss_invalid_imu = self.vis_meas_loss(vis_meas[s], vis_meas_covar[s], gt_rel_poses[s].cuda())
 
-            # loss = vis_meas_loss_invalid_imu + loss_vis_meas + 4 * loss_abs
-            loss =  vis_meas_loss_invalid_imu + 10* loss_vis_meas + loss_abs
+            loss = vis_meas_loss_invalid_imu + loss_vis_meas + 10 * loss_abs
+            # loss =  vis_meas_loss_invalid_imu + 10* loss_vis_meas + loss_abs
         elif par.enable_ekf:
             loss, _, _ = self.ekf_loss(poses, gt_poses.cuda(), ekf_states, gt_rel_poses.cuda(), vis_meas, vis_meas_covar)
         else:
@@ -124,9 +124,9 @@ class _TrainAssistant(object):
         # angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
 
-        trans_loss = self.loss_fn1(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
+        trans_loss = self.loss_fn(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
                         # self.loss_fn1(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
-        angle_loss = self.loss_fn1(predicted_rel_poses[:, :, 0:3],gt_rel_poses[:, :, 0:3])
+        angle_loss = self.loss_fn(predicted_rel_poses[:, :, 0:3],gt_rel_poses[:, :, 0:3])
                         # self.loss_fn1(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])) \
         # trans_loss = self.loss_fn1(predicted_rel_poses[:,:,3:6],gt_rel_poses[:,:,3:6])
 
@@ -143,8 +143,8 @@ class _TrainAssistant(object):
             err_weighted_by_covar = torch.matmul(torch.matmul(err.transpose(-2, -1), vis_meas_covar.inverse()), err)
             loss = torch.mean(log_Q_norm + torch.squeeze(err_weighted_by_covar))
         else:
-            # loss = (par.k1 * angle_loss + trans_loss)
-            loss = ( angle_loss + par.k1 * trans_loss)
+            loss = (par.k1 * angle_loss + trans_loss)
+            # loss = ( angle_loss + par.k1 * trans_loss)
             # loss = angle_loss + trans_loss
 
         # log the loss
@@ -214,6 +214,7 @@ class _TrainAssistant(object):
         # loss_rel = (par.k1 * rel_angle_loss + rel_trans_loss)
         # loss = k3 * loss_rel + (1 - k3) * loss_abs
         loss_vis_meas = self.vis_meas_loss(vis_meas, vis_meas_covar, gt_rel_poses)
+
         loss = k3 * loss_vis_meas + (1 - k3) * loss_abs
 
         assert not torch.any(torch.isnan(loss))

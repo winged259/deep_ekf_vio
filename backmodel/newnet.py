@@ -7,7 +7,7 @@ from params import par
 import torchvision.models as models
 from torchvision.models import ResNet18_Weights, resnet18, swin_v2_b, Swin_V2_B_Weights
 from torchvision.models.optical_flow import raft_large, Raft_Large_Weights
-from .common import *
+# from .common import *
 from backmodel.resnet import resnet18_cbam, ChannelAttention, SpatialAttention, LargeKernelAttn
 
 def conv3x3(in_channels, out_channels, stride=1, 
@@ -117,8 +117,10 @@ class Reg(nn.Module):
         self.deconv_with_bias = False
         layers = [2,2,2,2]
         # layers = [3,4,6,3]
-
-        self.conv1 = nn.Conv2d(inputnum, 64, kernel_size=7, stride=2, padding=3,
+        self.firstconv = nn.Sequential(conv(inputnum, 32, 3, 2, 1, 1, False),
+                                       conv(32, 32, 3, 1, 1, 1),
+                                       conv(32, 32, 3, 1, 1, 1))
+        self.conv1 = nn.Conv2d(32, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64, momentum=0.1)
         self.relu = nn.ReLU(inplace=True)
@@ -200,6 +202,7 @@ class Reg(nn.Module):
     
 
     def forward(self, x):
+        x = self.firstconv(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
