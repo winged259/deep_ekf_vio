@@ -335,7 +335,7 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
         logger.print('Load pretrained model')
 
         vo_model_dict = e2e_vio_model.vo_module.state_dict()
-        update_dict = {k: v for k, v in pretrained_w['state_dict'].items() if k in vo_model_dict}
+        update_dict = {k: v for k, v in pretrained_w['vo_module'].items() if k in vo_model_dict}
         assert (len(update_dict) > 0)
         vo_model_dict.update(update_dict)
         e2e_vio_model.vo_module.load_state_dict(vo_model_dict)

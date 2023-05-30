@@ -70,7 +70,7 @@ class Parameters(object):
         self.vis_meas_covar_use_fixed = False
 
         # Training parameters
-        self.epochs = 50
+        self.epochs = 100
         self.batch_size = 64
         self.pin_mem = True
         self.cache_image = True
@@ -142,7 +142,9 @@ class KITTIParams(Parameters):
                                               0, 0, 0, 0, 0, 0,  # C, r
                                               1e-2, 1e-2, 1e-2,  # v
                                               1e-8, 1e-8, 1e-8,  # bw
-                                              1e-1, 1e-1, 1e-1])  # ba
+                                              1e-1, 1e-1, 1e-1,  # ba
+                                              3e0,  # lambd
+                                              ])  # ba
         self.init_covar_diag_eps = 1e-12
         #
         self.imu_noise_covar_diag = np.array([1e-7,  # w
