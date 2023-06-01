@@ -6,9 +6,10 @@ import torch.nn.functional as F
 from params import par
 import torchvision.models as models
 from torchvision.models import ResNet18_Weights, resnet18, swin_v2_b, Swin_V2_B_Weights
-from torchvision.models.optical_flow import raft_large, Raft_Large_Weights
+from torchvision.models.optical_flow import raft_large, Raft_Large_Weights, raft_small, Raft_Small_Weights
 from .common import *
-from backmodel.resnet import resnet18_cbam, ChannelAttention, SpatialAttention, LargeKernelAttn
+from backmodel.resnet import ChannelAttention, SpatialAttention
+from backmodel.convgru import ConvGRU
 
 def conv3x3(in_channels, out_channels, stride=1, 
             padding=1, bias=True, groups=1):    
@@ -75,234 +76,118 @@ class SpatialAttention(nn.Module):
 
 class BasicBlock(nn.Module):
     expansion = 1
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride, downsample, pad, dilation):
         super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes, momentum=0.1)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes)
-        self.bn2 = nn.BatchNorm2d(planes, momentum=0.1)
+
+        self.conv1 = conv(inplanes, planes, 3, stride, pad, dilation)
+        self.conv2 = nn.Conv2d(planes, planes, 3, 1, pad, dilation)
+
         self.downsample = downsample
         self.stride = stride
-        self.ca = ChannelAttention(planes)
-        self.sa = SpatialAttention()
 
     def forward(self, x):
-        residual = x
-        # x = self.attn(x)
         out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
         out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.ca(out)
-        out = self.sa(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            x = self.downsample(x)
+        out += x
 
-        out += residual
-        out = self.relu(out)
-
-        return out
+        return F.relu(out, inplace=True)
 
 class Reg(nn.Module):
-    def __init__(self, inputnum=2) -> None:
+    def __init__(self, inputnum=8) -> None:
         super().__init__()
         self.inputnum = inputnum
+        blocknums = [2,2,3,4,6,7,3]
+        outputnums = [32,64,64,128,128,256,256]
 
-        self.inplanes = 64
-        self.deconv_with_bias = False
-        layers = [2,2,2,2]
-        # layers = [3,4,6,3]
+        self.firstconv = nn.Sequential(conv(inputnum, 32, 3, 2, 1, 1),
+                                       conv(32, 32, 3, 1, 1, 1),
+                                       conv(32, 32, 3, 1, 1, 1))
 
-        self.conv1 = nn.Conv2d(inputnum, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
-        self.bn1 = nn.BatchNorm2d(64, momentum=0.1)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(BasicBlock, 64, layers[0])
-        self.layer2 = self._make_layer(BasicBlock, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(BasicBlock, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(BasicBlock, 512, layers[3], stride=2)
+        self.inplanes = 32
 
-        self.deconv_layers = self._make_deconv_layer(num_layers=3, num_filters=(256,256,256), num_kernels=(4,4,4))
-        self.final_layer = nn.Conv2d(
-            in_channels=256,
-            out_channels=12,
-            kernel_size=1,
-            stride=1,
-            padding=0
-        )
-        self.final_pooling = nn.AdaptiveAvgPool2d(1)
+        self.layer1 = self._make_layer(BasicBlock, outputnums[2], blocknums[2], 2, 1, 1) # 40 x 28
+        self.layer2 = self._make_layer(BasicBlock, outputnums[3], blocknums[3], 2, 1, 1) # 20 x 14
+        self.layer3 = self._make_layer(BasicBlock, outputnums[4], blocknums[4], 2, 1, 1) # 10 x 7
+        self.layer4 = self._make_layer(BasicBlock, outputnums[5], blocknums[5], 2, 1, 1) # 5 x 4
+        self.layer5 = self._make_layer(BasicBlock, outputnums[6], blocknums[6], 2, 1, 1) # 3 x 2
+        fcnum = outputnums[6] * 10
+        fc1_trans = linear(fcnum, 128)
+        fc2_trans = linear(128,32)
+        fc3_trans = nn.Linear(32,6)
 
-    def _make_layer(self, block, planes, blocks, stride=1):
+        fc1_rot = linear(fcnum, 128)
+        fc2_rot = linear(128,32)
+        fc3_rot = nn.Linear(32,6)
+
+
+        self.trans1 = nn.Sequential(fc1_trans, fc2_trans, fc3_trans)
+        # for param in self.trans.parameters():
+        #     param.requires_grad = False
+        self.rot1 = nn.Sequential(fc1_rot, fc2_rot, fc3_rot)
+        # for param in self.rot.parameters():
+        #     param.requires_grad = False
+    def _make_layer(self, block, planes, blocks, stride, pad, dilation):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion, momentum=0.1),
-            )
+           downsample = nn.Conv2d(self.inplanes, planes * block.expansion,
+                          kernel_size=1, stride=stride)
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
+        layers.append(block(self.inplanes, planes, stride, downsample, pad, dilation))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+            layers.append(block(self.inplanes, planes,1,None,pad,dilation))
 
         return nn.Sequential(*layers)
-    
-    def _make_deconv_layer(self, num_layers, num_filters, num_kernels):
-        assert num_layers == len(num_filters), \
-            'ERROR: num_deconv_layers is different len(num_deconv_filters)'
-        assert num_layers == len(num_kernels), \
-            'ERROR: num_deconv_layers is different len(num_deconv_filters)'
-
-        layers = []
-        for i in range(num_layers):
-            kernel, padding, output_padding = \
-                self._get_deconv_cfg(num_kernels[i], i)
-
-            planes = num_filters[i]
-            layers.append(
-                nn.ConvTranspose2d(
-                    in_channels=self.inplanes,
-                    out_channels=planes,
-                    kernel_size=kernel,
-                    stride=2,
-                    padding=padding,
-                    output_padding=output_padding,
-                    bias=self.deconv_with_bias))
-            layers.append(nn.BatchNorm2d(planes, momentum=0.1))
-            # layers.append(ChannelAttention(planes))
-            # layers.append(SpatialAttention())
-            layers.append(nn.ReLU(inplace=True))
-            self.inplanes = planes
-
-
-        return nn.Sequential(*layers)
-
-    def _get_deconv_cfg(self, deconv_kernel, index):
-        if deconv_kernel == 4:
-            padding = 1
-            output_padding = 0
-        elif deconv_kernel == 3:
-            padding = 1
-            output_padding = 1
-        elif deconv_kernel == 2:
-            padding = 0
-            output_padding = 0
-
-        return deconv_kernel, padding, output_padding
-    
-
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
+        x = self.firstconv(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        x = self.layer5(x)
 
-        x = self.deconv_layers(x)
-        x = self.final_layer(x)
-        x = self.final_pooling(x)
-        # print(x.shape)
-        return x.squeeze(-1)
+        x = x.view(x.shape[0], -1)
+        trans = self.trans1(x)
+        rot = self.rot1(x)
+        out = torch.cat((trans[:,:3],rot[:,:3],trans[:,3:],rot[:,3:]),dim=1)
+        return out
+
+        # return torch.cat((trans[:,:3],rot[:,:3],trans[:,3:],rot[:,3:]),dim=1)
 
 class RAFT(nn.Module):
     def __init__(self):
         super().__init__()
         self.model = raft_large(weights=Raft_Large_Weights.DEFAULT)
+        # self.model =  raft_small(weights=Raft_Small_Weights.DEFAULT)
         for param in self.model.parameters():
             param.requires_grad = False
-    def forward(self, x):
-        x1 = x[:,0:3,:]
-        x2 = x[:,3:6,:]
+    def forward(self, x1,x2):
+        # x1 = x[:,0:3,:]
+        # x2 = x[:,3:6,:]
         res = self.model(x1,x2)
         return res
 
-class PoseRegressor(nn.Module):
-    def __init__(self, fcnum=None) -> None:
+class NewNet(nn.Module):
+    def __init__(self, feature_extractor, regressor):
         super().__init__()
-        self.inplanes = 64
-        self.deconv_with_bias = False
-        # fc1_trans = linear(fcnum, 128)
-        # fc2_trans = linear(128,32)
-        # fc3_trans = linear(32,3)
-
-        # fc1_rot = linear(fcnum, 128)
-        # fc2_rot = linear(128,32)
-        # fc3_rot = linear(32,3)
-
-        # fc1_covar_t = linear(fcnum, 128)
-        # fc2_covar_t = linear(128,32)
-        # fc3_covar_t = linear(32,6)
-        # self.trans = nn.Sequential(fc1_trans, fc2_trans, fc3_trans)
-        # self.rot = nn.Sequential(fc1_rot, fc2_rot, fc3_rot)
-        # self.covar_t = nn.Sequential(fc1_covar_t, fc2_covar_t,fc3_covar_t)
-        self.deconv_layers = self._make_deconv_layer(num_layers=3, num_filters=(256,256,256), num_kernels=(4,4,4))
-        self.final_layer = nn.Conv2d(
-            in_channels=256,
-            out_channels=12,
-            kernel_size=1,
-            stride=1,
-            padding=0
-        )
-
-    def _make_deconv_layer(self, num_layers, num_filters, num_kernels):
-        assert num_layers == len(num_filters), \
-            'ERROR: num_deconv_layers is different len(num_deconv_filters)'
-        assert num_layers == len(num_kernels), \
-            'ERROR: num_deconv_layers is different len(num_deconv_filters)'
-
-        layers = []
-        for i in range(num_layers):
-            kernel, padding, output_padding = \
-                self._get_deconv_cfg(num_kernels[i], i)
-
-            planes = num_filters[i]
-            layers.append(
-                nn.ConvTranspose2d(
-                    in_channels=self.inplanes,
-                    out_channels=planes,
-                    kernel_size=kernel,
-                    stride=2,
-                    padding=padding,
-                    output_padding=output_padding,
-                    bias=self.deconv_with_bias))
-            layers.append(nn.BatchNorm2d(planes, momentum=0.1))
-            layers.append(nn.ReLU(inplace=True))
-            self.inplanes = planes
-
-        return nn.Sequential(*layers)
-
-    def _get_deconv_cfg(self, deconv_kernel, index):
-        if deconv_kernel == 4:
-            padding = 1
-            output_padding = 0
-        elif deconv_kernel == 3:
-            padding = 1
-            output_padding = 1
-        elif deconv_kernel == 2:
-            padding = 0
-            output_padding = 0
-
-        return deconv_kernel, padding, output_padding
+        self.feature_extractor = feature_extractor
+        # for param in self.feature_extractor.parameters():
+        #     param.requires_grad = False
+        # fe_out_planes = self.feature_extractor.fc.in_features
+        self.regressor = regressor
     
-    
-    def forward(self,x):
-        # trans = self.trans(x)
-        # rot = self.rot(x)
-        # covar_t = self.covar_t(x)
-        # out = torch.cat((trans,rot, covar_t), dim=1)
-        x = self.deconv_layers(x)
-        x = self.final_layer(x)
+    def forward(self,x1, x2):
+
+        x = self.feature_extractor(x1,x2)
+        
+        x = x[-1]
+        x = torch.cat((x,x1,x2), dim=1)
+        x = self.regressor(x)
+       
         return x
 
 if __name__ == '__main__':

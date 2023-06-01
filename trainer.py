@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from eval import EurocErrorCalc, KittiErrorCalc
 from eval.gen_trajectory import gen_trajectory_rel_iter, gen_trajectory_abs_iter
 from new_loss import *
+import torch_se3
 
 
 class _OnlineDatasetEvaluator(object):
@@ -104,8 +105,8 @@ class _TrainAssistant(object):
             if np.any(s):
                 vis_meas_loss_invalid_imu = self.vis_meas_loss(vis_meas[s], vis_meas_covar[s], gt_rel_poses[s].cuda())
 
-            # loss = vis_meas_loss_invalid_imu + loss_vis_meas + 4 * loss_abs
-            loss =  vis_meas_loss_invalid_imu + 10* loss_vis_meas + loss_abs
+            loss = vis_meas_loss_invalid_imu + loss_vis_meas + 4 * loss_abs
+            # loss =  vis_meas_loss_invalid_imu + loss_vis_meas + 10 * loss_abs
         elif par.enable_ekf:
             loss, _, _ = self.ekf_loss(poses, gt_poses.cuda(), ekf_states, gt_rel_poses.cuda(), vis_meas, vis_meas_covar)
         else:
@@ -124,9 +125,9 @@ class _TrainAssistant(object):
         # angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
 
-        trans_loss = self.loss_fn1(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
+        trans_loss = self.loss_fn(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
                         # self.loss_fn1(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
-        angle_loss = self.loss_fn1(predicted_rel_poses[:, :, 0:3],gt_rel_poses[:, :, 0:3])
+        angle_loss = self.loss_fn(predicted_rel_poses[:, :, 0:3],gt_rel_poses[:, :, 0:3])
                         # self.loss_fn1(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])) \
         # trans_loss = self.loss_fn1(predicted_rel_poses[:,:,3:6],gt_rel_poses[:,:,3:6])
 
@@ -143,8 +144,8 @@ class _TrainAssistant(object):
             err_weighted_by_covar = torch.matmul(torch.matmul(err.transpose(-2, -1), vis_meas_covar.inverse()), err)
             loss = torch.mean(log_Q_norm + torch.squeeze(err_weighted_by_covar))
         else:
-            # loss = (par.k1 * angle_loss + trans_loss)
-            loss = ( angle_loss + par.k1 * trans_loss)
+            loss = (par.k1 * angle_loss + trans_loss)
+            # loss = ( angle_loss + par.k1 * trans_loss)
             # loss = angle_loss + trans_loss
 
         # log the loss
@@ -189,12 +190,12 @@ class _TrainAssistant(object):
         length_div = torch.arange(start=1, end=abs_errors.size(1) + 1, device=abs_errors.device,
                                   dtype=torch.float32).view(1, -1, 1)
         # calculate the F norm squared from identity
-        I_minus_angle_errors = (torch.eye(3, 3, device=abs_errors.device) -
-                                abs_errors[:, :, 0:3, 0:3]) / length_div.view(1, -1, 1, 1)
-        I_minus_angle_errors_sq = torch.matmul(I_minus_angle_errors, I_minus_angle_errors.transpose(-2, -1))
-        abs_angle_errors_sq = torch.sum(torch.diagonal(I_minus_angle_errors_sq, dim1=-2, dim2=-1), dim=-1)
-        # abs_angle_errors = torch.squeeze(torch_se3.log_SO3_b(abs_errors[:, :, 0:3, 0:3]), -1) / length_div
-        # abs_angle_errors_sq = torch.sum(abs_angle_errors ** 2, dim=-1)  # norm squared
+        # I_minus_angle_errors = (torch.eye(3, 3, device=abs_errors.device) -
+        #                         abs_errors[:, :, 0:3, 0:3]) / length_div.view(1, -1, 1, 1)
+        # I_minus_angle_errors_sq = torch.matmul(I_minus_angle_errors, I_minus_angle_errors.transpose(-2, -1))
+        # abs_angle_errors_sq = torch.sum(torch.diagonal(I_minus_angle_errors_sq, dim1=-2, dim2=-1), dim=-1)
+        abs_angle_errors = torch.squeeze(torch_se3.log_SO3_b(abs_errors[:, :, 0:3, 0:3]), -1) / length_div
+        abs_angle_errors_sq = torch.sum(abs_angle_errors ** 2, dim=-1)  # norm squared
 
         abs_trans_errors_sq = torch.sum((abs_errors[:, :, 0:3, 3] / length_div) ** 2, dim=-1)
 
@@ -210,7 +211,7 @@ class _TrainAssistant(object):
 
         k3 = self.schedule(par.k3)
 
-        loss_abs = (par.k2 * abs_angle_loss + abs_trans_loss) * par.k4 ** 2
+        loss_abs = (par.k2 * abs_angle_loss +  abs_trans_loss) * par.k4 ** 2
         # loss_rel = (par.k1 * rel_angle_loss + rel_trans_loss)
         # loss = k3 * loss_rel + (1 - k3) * loss_abs
         loss_vis_meas = self.vis_meas_loss(vis_meas, vis_meas_covar, gt_rel_poses)
@@ -320,12 +321,12 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     # Model
     e2e_vio_model = E2EVIO()
     e2e_vio_model = e2e_vio_model.cuda()
-    # for param in e2e_vio_model.parameters():
+    # for param in e2e_vio_model.vo_module.extractor.model.feature_encoder.parameters():
     #     param.requires_grad = False
-    # for param in e2e_vio_model.vo_module.extractor.parameters():
-    #     param.requires_grad = False
-    # for param in e2e_vio_model.vo_module.regressor.extractor.parameters():
-    #     param.requires_grad = False
+    for param in e2e_vio_model.vo_module.parameters():
+        param.requires_grad = False
+    for param in e2e_vio_model.vo_module.newnet.feature_extractor.parameters():
+        param.requires_grad = True
     online_evaluator = _OnlineDatasetEvaluator(e2e_vio_model, par.valid_seqs, 50)
 
     # Load FlowNet weights pretrained with FlyingChairs
@@ -333,12 +334,13 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     if par.pretrained and not resume_model_path:
         pretrained_w = torch.load(par.pretrained)
         logger.print('Load pretrained model')
-
-        vo_model_dict = e2e_vio_model.vo_module.state_dict()
-        update_dict = {k: v for k, v in pretrained_w['state_dict'].items() if k in vo_model_dict}
+        vo_model_dict = e2e_vio_model.vo_module.regressor.state_dict()
+        update_dict = {k: v for k, v in pretrained_w.items() if k in vo_model_dict 
+                    #    and k!= 'conv1.weight'
+                       }
         assert (len(update_dict) > 0)
         vo_model_dict.update(update_dict)
-        e2e_vio_model.vo_module.load_state_dict(vo_model_dict)
+        e2e_vio_model.vo_module.regressor.load_state_dict(vo_model_dict)
 
     # Create optimizer
     logger.print("Optimizing on parameters:")
@@ -363,7 +365,9 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     if resume_model_path:
         state_dict_update = logger.clean_state_dict_key(torch.load(resume_model_path))
         state_dict_update = {key: state_dict_update[key] for key in state_dict_update
-                             if key not in par.exclude_resume_weights}
+                             if key not in par.exclude_resume_weights
+                            #    and 'vo_module.extractor' not in key
+                               }
         state_dict = e2e_vio_model.state_dict()
         state_dict_update = {k: v for k, v in state_dict_update.items() if k in state_dict}
         state_dict.update(state_dict_update)
@@ -437,3 +441,11 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
 
         logger.print("Latest saves:",
                      " ".join(["%s: %s" % (k, v) for k, v in logger.log_training_state_latest_epoch.items()]))
+
+if __name__ == '__main__':
+    a = _TrainAssistant(None)
+    est = torch.rand(5,7,3)
+    gt  = torch.rand(5,7,3)
+    abs = torch.matmul(est[:,1:],gt[:,1:])
+    print(abs.shape)
+    a.ekf_loss()
