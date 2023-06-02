@@ -7,9 +7,7 @@ from params import par
 import torchvision.models as models
 from torchvision.models import ResNet18_Weights, resnet18, swin_v2_b, Swin_V2_B_Weights
 from torchvision.models.optical_flow import raft_large, Raft_Large_Weights, raft_small, Raft_Small_Weights
-from .common import *
 from backmodel.resnet import ChannelAttention, SpatialAttention
-from backmodel.convgru import ConvGRU
 
 def conv3x3(in_channels, out_channels, stride=1, 
             padding=1, bias=True, groups=1):    

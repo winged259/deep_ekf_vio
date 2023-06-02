@@ -119,29 +119,7 @@ class RAFT(nn.Module):
         return flow_predictions
     
 if __name__ == '__main__':
-    # import argparse
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--name', default='raft', help="name your experiment")
-    # parser.add_argument('--stage', help="determines which dataset to use for training") 
-    # parser.add_argument('--restore_ckpt', help="restore checkpoint")
-    # parser.add_argument('--small', action='store_true', help='use small model')
-    # parser.add_argument('--validation', type=str, nargs='+')
-
-    # parser.add_argument('--lr', type=float, default=0.00002)
-    # parser.add_argument('--num_steps', type=int, default=100000)
-    # parser.add_argument('--batch_size', type=int, default=6)
-    # parser.add_argument('--image_size', type=int, nargs='+', default=[384, 512])
-    # parser.add_argument('--gpus', type=int, nargs='+', default=[0,1])
-    # parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
-
-    # parser.add_argument('--iters', type=int, default=12)
-    # parser.add_argument('--wdecay', type=float, default=.00005)
-    # parser.add_argument('--epsilon', type=float, default=1e-8)
-    # parser.add_argument('--clip', type=float, default=1.0)
-    # parser.add_argument('--dropout', type=float, default=0.0)
-    # parser.add_argument('--gamma', type=float, default=0.8, help='exponential weighting')
-    # parser.add_argument('--add_noise', action='store_true')
-    # args = parser.parse_args()
+   
     import os, sys; 
     sys.path.append(os.path.dirname(os.path.realpath('/mnt/data/teamAI/duy/deep_ekf_vio/backmodel/utils/utils.py')))
     model = RAFT()

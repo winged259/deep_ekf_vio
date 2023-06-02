@@ -11,7 +11,7 @@ np.set_printoptions(linewidth=1024)
 np.random.seed(0)
 torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.benchmark = True
 
 
 class AttrDict(dict):
@@ -42,8 +42,8 @@ class Parameters(object):
         self.results_dir = os.path.join(self.results_coll_dir,
                                         "train" + "_%s" % self.timestamp.strftime('%Y%m%d-%H-%M-%S'))
 
-        self.seq_len = 5
-        self.sample_times = 1
+        self.seq_len = 32
+        self.sample_times = 2
 
         self.exclude_resume_weights = ["imu_noise_covar_weights", "init_covar_diag_sqrt"]
 
@@ -71,7 +71,7 @@ class Parameters(object):
 
         # Training parameters
         self.epochs = 50
-        self.batch_size = 16
+        self.batch_size = 8
         self.pin_mem = True
         self.cache_image = True
         self.optimizer = torch.optim.Adam
@@ -81,7 +81,7 @@ class Parameters(object):
             "imu_noise_covar_weights.*": 1e-1
         }
 
-
+        
         self.corr_levels = 4
         self.corr_radius = 3
         self.small = False

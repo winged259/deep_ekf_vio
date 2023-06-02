@@ -323,10 +323,12 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     e2e_vio_model = e2e_vio_model.cuda()
     # for param in e2e_vio_model.vo_module.extractor.model.feature_encoder.parameters():
     #     param.requires_grad = False
-    for param in e2e_vio_model.vo_module.parameters():
-        param.requires_grad = False
-    for param in e2e_vio_model.vo_module.newnet.feature_extractor.parameters():
-        param.requires_grad = True
+    # for param in e2e_vio_model.vo_module.parameters():
+    #     param.requires_grad = False
+    # for param in e2e_vio_model.vo_module.newnet.feature_extractor.parameters():
+    #     param.requires_grad = True
+
+    
     online_evaluator = _OnlineDatasetEvaluator(e2e_vio_model, par.valid_seqs, 50)
 
     # Load FlowNet weights pretrained with FlyingChairs

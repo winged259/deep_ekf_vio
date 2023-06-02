@@ -146,8 +146,8 @@ class BasicUpdateBlock(nn.Module):
 
         net = self.gru(net, inp)
         delta_flow = self.flow_head(net)
-        delta_reg =self.reg_head(net)
+        # delta_reg =self.reg_head(net)
 
         # scale mask to balence gradients
         mask = .25 * self.mask(net)
-        return net, mask, delta_flow, delta_reg
+        return net, mask, delta_flow
