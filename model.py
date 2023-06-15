@@ -243,12 +243,12 @@ class IMUKalmanFilter(nn.Module):
 
 
 class DeepVO(nn.Module):
-    def __init__(self, imsize1, imsize2, batchNorm):
+    def __init__(self):
         super(DeepVO, self).__init__()
 
-        # self.extractor = RAFT()
+        self.extractor = RAFT()
         # self.extractor = ResNet(BasicBlock, [2, 2, 2, 2])
-        self.regressor = Res(inputnum=6)
+        self.regressor = Res(inputnum=2)
         # self.regressor = PoseRegressor(inputnum=2)
 
 
@@ -260,10 +260,10 @@ class DeepVO(nn.Module):
         seq_len = x.size(1)
         # CNN
         x = x.view(batch_size * seq_len, x.size(2), x.size(3), x.size(4))
-        # feat = self.extractor(x)[-1]
+        feat = self.extractor(x)[-1]
         # x = self.extractor(x)
 
-        x = self.regressor(x)
+        x = self.regressor(feat)
         # x = self.regressor(torch.cat((feat,x[:,0:3,:]),dim=1))
         x = x.view(batch_size, seq_len, x.size(1), x.size(2), x.size(3))
         return x
@@ -279,7 +279,7 @@ class E2EVIO(nn.Module):
     def __init__(self):
         super(E2EVIO, self).__init__()
         self.regressor = PoseRegressor()
-        self.vo_module = DeepVO(par.img_h, par.img_w, par.batch_norm)
+        self.vo_module = DeepVO()
         # self.gru_layer = ConvGRU(input_size=256, hidden_size=256, kernel_size=1, num_layers=1)
         self.imu_noise_covar_weights = torch.nn.Linear(1, 4, bias=False)
         if not par.train_imu_noise_covar:
@@ -312,11 +312,17 @@ class E2EVIO(nn.Module):
         return torch.diag(imu_noise_covar_diag)
 
     def update_vis_meas(self, prev_pose, features):
-
-        diff = self.regressor(features)
-        pose = prev_pose + diff[:,:6]
-        pose = torch.cat((pose,diff[:,6:]),dim=1)
-        return pose
+        # Update pose scale
+        new_pose = self.regressor(features)
+        new_covar = new_pose[:,6:]
+        new_pose = new_pose[:,:6]
+        prev_pose_norm = torch.norm(prev_pose[:,3:], dim = -1).unsqueeze(-1)
+        new_pose_norm = torch.norm(new_pose[:,3:], dim=-1).unsqueeze(-1)
+        # print(new_pose_norm.shape)
+        # print(prev_pose_norm.shape)
+        # print(new_pose.shape)
+        new_pose = torch.cat((new_pose[:,:3],new_pose[:,3:]/new_pose_norm * prev_pose_norm), dim=1) 
+        return new_pose, new_covar
 
     def forward(self, images, imu_data,  prev_pose, prev_state, prev_covar, T_imu_cam, prev_vis_meas, prev_vis_meas_covar):
         vis_meas_covar_scale = torch.ones(6, device=images.device)
@@ -349,7 +355,7 @@ class E2EVIO(nn.Module):
             pred_states, pred_covars = self.ekf_module.predict(imu_data[:, k], imu_noise_covar,
                                                             states_over_timesteps[-1], covars_over_timesteps[-1])
 
-            vis_meas = prev_vis_meas
+            vis_meas = vis_meas_over_timesteps[-1]
             
             # vis_meas_and_covar = features[:, k]
             vis_meas_covar = torch.diagonal(vis_meas_covar_over_timesteps[-1], dim1=-2, dim2=-1)
@@ -374,9 +380,9 @@ class E2EVIO(nn.Module):
                                                                         est_state, est_covar)
             
             if k < num_timesteps-1:
-                new_vis_meas_and_covar = self.update_vis_meas(vis_meas_over_timesteps[-1], features[:, k+1])
-                vis_meas_over_timesteps.append(new_vis_meas_and_covar[:,:6])
-                vis_meas_covar_over_timesteps.append(torch.diag_embed(new_vis_meas_and_covar[:,6:]))
+                new_vis_meas, new_vis_meas_covar = self.update_vis_meas(vis_meas, features[:, k+1])
+                vis_meas_over_timesteps.append(new_vis_meas)
+                vis_meas_covar_over_timesteps.append(torch.diag_embed(new_vis_meas_covar))
 
             poses_over_timesteps.append(new_pose)
             states_over_timesteps.append(new_state)

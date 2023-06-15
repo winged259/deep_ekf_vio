@@ -129,18 +129,18 @@ class _TrainAssistant(object):
         # angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
 
-        # trans_loss = self.loss_fn1(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
+        trans_loss = self.loss_h(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
         # trans_loss = self.sequence_loss(predicted_rel_poses[:, :, 0:3],gt_rel_poses[:, :, 0:3])
                         # self.loss_fn1(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
-        gt_trans_norm = torch.norm(gt_rel_poses[:, :, 3:6], dim=2).unsqueeze(2)
-        pred_trans_norm = torch.norm(predicted_rel_poses[:, :, 3:6], dim=2).unsqueeze(2)
-        pred_trans_scaled = predicted_rel_poses[:, :, 3:6]/ pred_trans_norm * gt_trans_norm
-        trans_loss = self.loss_h(pred_trans_scaled, gt_rel_poses[:,:,3:6])
-        angle_loss = self.loss_h(predicted_rel_poses[:,:,0:3],gt_rel_poses[:, :, 0:3])
+        # gt_trans_norm = torch.norm(gt_rel_poses[:, :, 3:6], dim=2).unsqueeze(2)
+        # pred_trans_norm = torch.norm(predicted_rel_poses[:, :, 3:6], dim=2).unsqueeze(2)
+        # pred_trans_scaled = predicted_rel_poses[:, :, 3:6]/ pred_trans_norm * gt_trans_norm
+        # trans_loss = self.loss_h(pred_trans_scaled, gt_rel_poses[:,:,3:6])
+        # angle_loss = self.loss_h(predicted_rel_poses[:,:,0:3],gt_rel_poses[:, :, 0:3])
                         # self.loss_fn1(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])) \
         # trans_loss = self.loss_fn1(predicted_rel_poses[:,:,3:6],gt_rel_poses[:,:,3:6])
 
-        # angle_loss = self.loss_fn1(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
+        angle_loss = self.loss_h(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # covar_loss = torch.mean(vis_meas_covar)
 
         if par.gaussian_pdf_loss:
@@ -373,7 +373,7 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
 
     optimizer = par.optimizer(optimizer_params, **par.optimizer_args)
 
-    scheduler = StepLR(optimizer, step_size=20, gamma=0.1)
+    # scheduler = StepLR(optimizer, step_size=20, gamma=0.1)
 
     # Load trained DeepVO model and optimizer
     if resume_model_path:
@@ -441,7 +441,7 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
         err_eval = online_evaluator.evaluate()
         logger.tensorboard.add_scalar("epoch/eval_loss", err_eval, epoch)
 
-        scheduler.step()
+        # scheduler.step()
 
         # Save model
         if (epoch + 1) % 5 == 0:
