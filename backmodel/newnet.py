@@ -351,16 +351,12 @@ class PoseRegressor(nn.Module):
         # for param in self.covar.parameters():
         #     param.requires_grad = False
     def forward(self,x):
-        batch_size = x.size(0)
-        seq_len = x.size(1)
 
-        x = x.view(batch_size * seq_len, x.size(2), x.size(3), x.size(4))
         x = x.view(x.shape[0], -1)
         trans = self.trans(x)
         rot = self.rot(x)
         covar = self.covar(x)
-        x = torch.cat((trans,rot, covar), dim=1)
-        x = x.view(batch_size, seq_len,-1)
+        x = torch.cat((rot, trans, covar), dim=1)
         return x
 
 

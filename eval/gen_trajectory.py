@@ -80,15 +80,18 @@ def gen_trajectory_abs_iter(model, dataloaders):
             prev_pose = torch.stack([torch.tensor(est_poses_dict[k][-1]) for k in data_keys]).cuda()
             prev_state = torch.stack([torch.tensor(est_states_dict[k][-1]) for k in data_keys]).cuda()
             prev_covar = torch.stack([torch.tensor(est_covars_dict[k][-1]) for k in data_keys]).cuda()
-            # lstm_states = torch.stack([lstm_states_dict[k] for k in data_keys])
+            prev_vis_meas = torch.stack([torch.tensor(est_vis_meas_dict[k][-1]) for k in data_keys]).cuda()
+            prev_vis_meas_covar = torch.stack([torch.tensor(vis_meas_covar_dict[k][-1]) for k in data_keys]).cuda()
         else:
             prev_pose = torch.stack([torch.squeeze(d[5], 0) for d in data_list])[:, 0].inverse().cuda()
             prev_state = torch.stack([torch.squeeze(d[3], 0) for d in data_list]).cuda()
             prev_covar = None
+            prev_vis_meas = torch.stack([torch.squeeze(d[6], 0) for d in data_list])[:, 0].cuda()
+            prev_vis_meas_covar = None
             # lstm_states = None
 
         vis_meas, vis_meas_covar, est_poses, est_ekf_states, est_ekf_covars = \
-            model.forward(images, imu_data,  prev_pose, prev_state, prev_covar, T_imu_cam)
+            model.forward(images, imu_data,  prev_pose, prev_state, prev_covar, T_imu_cam, prev_vis_meas, prev_vis_meas_covar)
 
         est_poses = scale_pose(est_poses, gt_poses)
 

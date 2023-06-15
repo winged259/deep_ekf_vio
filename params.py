@@ -70,8 +70,8 @@ class Parameters(object):
         self.vis_meas_covar_use_fixed = False
 
         # Training parameters
-        self.epochs = 25
-        self.batch_size = 32
+        self.epochs = 50
+        self.batch_size = 64
         self.pin_mem = True
         self.cache_image = True
         self.optimizer = torch.optim.Adam
@@ -129,8 +129,8 @@ class KITTIParams(Parameters):
         self.valid_seqs = ['K10']
         self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq and x not in self.valid_seqs]
 
-        # self.train_seqs = ['K04']
-        # self.valid_seqs = ['K04']
+        # self.train_seqs = ['K00_7']
+        # self.valid_seqs = ['K07']
 
         self.img_w = 320
         self.img_h = 96
@@ -160,8 +160,8 @@ class KITTIParams(Parameters):
         self.vis_meas_covar_gamma = 1
 
         # -----------------------------------------
-        self.k1 = 100  # rel loss angle multiplier
-        self.k2 = 500.  # abs loss angle multiplier
+        self.k1 = 500  # rel loss angle multiplier
+        self.k2 = 2500.  # abs loss angle multiplier
         self.k3 = {  # (1-k3)*abs + k3*rel weighting, not actually used
             0: 0.9,
         }
