@@ -11,7 +11,7 @@ np.set_printoptions(linewidth=1024)
 np.random.seed(0)
 torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False
 
 
 class AttrDict(dict):
@@ -61,7 +61,7 @@ class Parameters(object):
         self.stateful_training = True
 
         # EKF parameters
-        self.enable_ekf = True 
+        self.enable_ekf = False
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
@@ -71,7 +71,7 @@ class Parameters(object):
 
         # Training parameters
         self.epochs = 50
-        self.batch_size = 32
+        self.batch_size = 16
         self.pin_mem = True
         self.cache_image = True
         self.optimizer = torch.optim.Adam
@@ -126,11 +126,11 @@ class KITTIParams(Parameters):
         self.eval_seq = 'K10'
 
 
-        self.valid_seqs = ['K10']
-        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq and x not in self.valid_seqs]
+        # self.valid_seqs = ['K10']
+        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq and x not in self.valid_seqs]
 
-        # self.train_seqs = ['K04']
-        # self.valid_seqs = ['K04']
+        self.train_seqs = ['K07']
+        self.valid_seqs = ['K07']
 
         self.img_w = 320
         self.img_h = 96
@@ -167,7 +167,7 @@ class KITTIParams(Parameters):
         }
         # error scale for covar loss, not really used,
         # but must be 1.0 for self.gaussian_pdf_loss = False
-        self.k4 = 10.0
+        self.k4 = 1.0
 
         self.gaussian_pdf_loss = False
 
@@ -191,8 +191,8 @@ class EUROCParams(Parameters):
         self.all_seqs = ['MH_01', 'MH_02', 'MH_03', 'MH_04', 'MH_05', "V1_01", "V1_02", 'V1_03', "V2_01", "V2_02"]
         self.eval_seq = "V1_02"
 
-        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
-        # self.train_seqs = ['V2_01']
+        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        self.train_seqs = ['V2_01']
         self.valid_seqs = [self.eval_seq]
 
         # self.train_seqs = ['MH_01', 'MH_02', 'MH_03', 'MH_04', "V1_01", "V1_02", "V2_01"]
@@ -227,8 +227,8 @@ class EUROCParams(Parameters):
         self.vis_meas_covar_beta = 3
         self.vis_meas_covar_gamma = 1
 
-        self.k1 = 500  # rel loss angle multiplier
-        self.k2 = 2500.  # abs loss angle multiplier
+        self.k1 = 100  # rel loss angle multiplier
+        self.k2 = 500.  # abs loss angle multiplier
         self.k3 = {  # (1-k3)*abs + k3*rel weighting
             0: 0.1,
         }
@@ -238,7 +238,7 @@ class EUROCParams(Parameters):
 
         self.data_aug_transforms = AttrDict({
             "enable": False,
-            "lr_flip": True,
+            "lr_flip": False,
             "ud_flip": False,
             "lrud_flip": False,
             "reverse": True,

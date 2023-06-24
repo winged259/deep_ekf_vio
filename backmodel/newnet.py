@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from params import par
 import torchvision.models as models
-from torchvision.models import ResNet18_Weights, resnet18, swin_v2_b, Swin_V2_B_Weights
+from torchvision.models import ResNet18_Weights, resnet18, swin_b, Swin_B_Weights
 from torchvision.models.optical_flow import raft_large, Raft_Large_Weights, raft_small, Raft_Small_Weights
 from .common import *
 
@@ -325,9 +325,8 @@ class Res(nn.Module):
         return x
 
 class PoseRegressor(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, fcnum=14400) -> None:
         super().__init__()
-        fcnum = 256 * 10
 
         fc1_trans = linear(fcnum, 128)
         fc2_trans = linear(128,32)
@@ -363,6 +362,6 @@ class PoseRegressor(nn.Module):
 if __name__ == '__main__':
     a = torch.rand(6,96,320)
     h = torch.rand(6,32,320)
-    gru = SepConvGRU()
-    b = gru(h,a)
-    print(b.shape)
+    model = swin_b(Swin_B_Weights.DEFAULT)
+    for k,v in model.named_parameters():
+        print(k)

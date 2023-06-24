@@ -370,26 +370,39 @@ class Test_EKF(unittest.TestCase):
         output_dir = os.path.join(par.results_coll_dir, "test_ekf_all_plotted")
         logger.initialize(output_dir, use_tensorboard=False)
 
-        seqs = ["K01", "K06", "K07", "K10"]
+        # seqs = ["K01", "K06", "K07", "K10"]
+        seqs = ['MH_01', 'MH_02', 'MH_03', 'MH_04', 'MH_05']
 
         device = "cpu"
         req_grad = False
-        imu_covar = torch.diag(torch.tensor([1e-5, 1e-5, 1e-5,
-                                             1e-8, 1e-8, 1e-8,
+        # imu_covar = torch.diag(torch.tensor([1e-5, 1e-5, 1e-5,
+        #                                      1e-8, 1e-8, 1e-8,
+        #                                      1e-1, 1e-1, 1e-1,
+        #                                      1e-3, 1e-3, 1e-3])).to(device)
+        imu_covar = torch.diag(torch.tensor([1e-3, 1e-3, 1e-3,
+                                             1e-5, 1e-5, 1e-5,
                                              1e-1, 1e-1, 1e-1,
-                                             1e-3, 1e-3, 1e-3])).to(device)
-        vis_meas_covar = torch.diag(torch.tensor([1e-2, 1e-2, 1e-2,
-                                                  1e0, 1e0, 1e0])).to(device)
+                                             1e-2, 1e-2, 1e-2])).to(device)
+        
+        # vis_meas_covar = torch.diag(torch.tensor([1e-2, 1e-2, 1e-2,
+        #                                           1e0, 1e0, 1e0])).to(device)
+        vis_meas_covar = torch.diag(torch.tensor([1e-3, 1e-3, 1e-3,
+                                                  1e-3, 1e-3, 1e-3])).to(device)
         init_covar = np.eye(18, 18)
-        init_covar[0:3, 0:3] = np.eye(3, 3) * 1e-4  # g
+        # init_covar[0:3, 0:3] = np.eye(3, 3) * 1e-4  # g
+        # init_covar[3:9, 3:9] = np.zeros([6, 6])  # C,r
+        # init_covar[9:12, 9:12] = np.eye(3, 3) * 1e-2  # v
+        # init_covar[12:15, 12:15] = np.eye(3, 3) * 1e-8  # bw
+        init_covar[0:3, 0:3] = np.eye(3, 3) * 1e-2  # g
         init_covar[3:9, 3:9] = np.zeros([6, 6])  # C,r
         init_covar[9:12, 9:12] = np.eye(3, 3) * 1e-2  # v
-        init_covar[12:15, 12:15] = np.eye(3, 3) * 1e-8  # bw
+        init_covar[12:15, 12:15] = np.eye(3, 3) * 1e-2  # bw
+        init_covar[15:18, 15:18] = np.eye(3, 3) * 1e2  # ba
         # init_covar[15:18, 15:18] = np.eye(3, 3) * 1e-2  # ba
         init_covar = np.tile(init_covar, (len(seqs), 1, 1,))
 
         timestamps, gt_poses, gt_vels, poses, states, covars = \
-            self.ekf_test_case(seqs, [0, 1091], init_covar, imu_covar, vis_meas_covar, device, req_grad)
+            self.ekf_test_case(seqs, [0, 561], init_covar, imu_covar, vis_meas_covar, device, req_grad)
 
         for i in range(0, len(seqs)):
             plot_ekf_data(os.path.join(output_dir, seqs[i]),

@@ -1,4 +1,4 @@
-folder='/mnt/data/teamAI/duy/deep_ekf_vio/results/train_20230615-20-56-55'
+folder='/mnt/data/teamAI/duy/deep_ekf_vio/results/train_20230623-09-33-24'
 model=$folder/saved_model.eval
 
 python exec.py gen_trajectory $model

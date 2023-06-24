@@ -20,7 +20,6 @@ resume_optimizer_path = os.path.abspath(arg_parsed.resume_optimizer_from) if arg
 
 results_dir = os.path.abspath(os.path.dirname(__file__)) if arg_parsed.run_eval_only else par.results_dir
 logger.initialize(working_dir=results_dir, use_tensorboard=True)
-
 # set the visible GPUs
 if gpu_ids:
     os.environ["CUDA_VISIBLE_DEVICES"] = ", ".join([str(i) for i in gpu_ids])
@@ -31,9 +30,9 @@ if not arg_parsed.run_eval_only:
     trainer.train(resume_model_path, resume_optimizer_path, arg_parsed.description)
     logger.print("Training took %.2fs" % (time.time() - start_t))
 
-for tag in ["valid", "train", "checkpoint", "eval"]:
+for tag in ["valid", "train",  "eval", "checkpoint"]:
     seq_results_dir = gen_trajectory(os.path.join(results_dir, "saved_model.%s" % tag),
-                                     par.valid_seqs + par.train_seqs, 5)
+                                     par.valid_seqs + par.train_seqs, 8)
     plot_trajectory(seq_results_dir)
     calc_error(seq_results_dir)
     plot_errors(seq_results_dir)

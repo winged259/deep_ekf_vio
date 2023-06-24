@@ -144,7 +144,7 @@ def preprocess_tum(seq_dir, output_dir, cam_still_range):
     logger.print("Camera still range [%d -> %d]" % (cam_still_range[0], cam_still_range[1]))
 
     left_cam_csv = open(os.path.join(seq_dir, 'cam0', 'data.csv'), 'r')
-    imu_csv = open(os.path.join('/mnt/data/teamAI/duy/data/TUM/dataset-corridor1_512_16/dso/' "gt_imu.csv"), 'r')
+    imu_csv = open(os.path.join('/mnt/data/teamAI/duy/data/TUM/dataset-corridor1_512_16/mav0/imu0/' "data.csv"), 'r')
     gt_csv = open(os.path.join(seq_dir, "mocap0", "data.csv"), "r")
     # cam_sensor_yaml_config = yaml.load(open(os.path.join(seq_dir, "cam0", "sensor.yaml")))
     T_cam_imu = np.linalg.inv(np.array([-0.9995250378696743, 0.029615343885863205, -0.008522328211654736, 0.04727988224914392,\
@@ -285,4 +285,5 @@ def preprocess_tum(seq_dir, output_dir, cam_still_range):
 
 
     if __name__ == '__main':
+        print('doing')
         preprocess_tum('/mnt/data/teamAI/duy/data/TUM//mnt/data/teamAI/duy/data/TUM/dataset-corridor1_512_16','/mnt/data/teamAI/duy/deep_ekf_vio/data', [0,40])

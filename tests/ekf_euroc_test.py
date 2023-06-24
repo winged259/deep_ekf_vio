@@ -15,8 +15,8 @@ class Test_EKF_EUROC(unittest.TestCase):
         output_dir = os.path.join(par.results_coll_dir, "test_ekf_euroc")
         logger.initialize(output_dir, use_tensorboard=False)
 
-        # seqs = ["MH_01"]
-        seqs = ["MH_01", "MH_02", "MH_03", "MH_04", "MH_05", "V1_01", "V1_02", "V1_03", "V2_01", "V2_02", "V2_03"]
+        seqs = ["MH_01"]
+        # seqs = ["MH_01", "MH_02", "MH_03", "MH_04", "MH_05", "V1_01", "V1_02", "V1_03", "V2_01", "V2_02", "V2_03"]
         # seqs2 = ["MH_01_eval", "MH_02_eval", "MH_03_eval", "MH_04_eval", "MH_05_eval",
         #          "V1_01_eval", "V1_02_eval", "V1_03_eval", "V2_01_eval", "V2_02_eval", "V2_03_eval"]
         # seqs = seqs + seqs2
@@ -56,7 +56,7 @@ class Test_EKF_EUROC(unittest.TestCase):
                 gt_rel_poses = gt_rel_poses.view(1, 1, 6, 1)
 
                 if i == 0:
-                    pose, ekf_state, ekf_covar = ekf.forward(imu_data, imu_covar, gt_poses_inv[:, 0], init_state,
+                    pose, ekf_state, ekf_covar = ekf.forward(imu_data, imu_covar, gt_poses_inv[:, 0].inverse(), init_state,
                                                              init_covar,
                                                              gt_rel_poses, vis_meas_covar,
                                                              torch.eye(4, 4).view(1, 4, 4))

@@ -4,8 +4,7 @@ import torch.nn.functional as F
 
 from backmodel.gmflow.backbone import CNNEncoder
 from backmodel.gmflow.transformer import FeatureTransformer, FeatureFlowAttention
-from backmodel.gmflow.matching import global_correlation_softmax, local_correlation_softmax
-from backmodel.gmflow.geometry import flow_warp
+from backmodel.gmflow.matching import global_correlation_softmax
 from backmodel.gmflow.utils import normalize_img, feature_add_position
 
 
@@ -40,12 +39,6 @@ class GMFlow(nn.Module):
                                               )
 
         # flow propagation with self-attn
-        self.feature_flow_attn = FeatureFlowAttention(in_channels=feature_channels)
-
-        # convex upsampling: concat feature0 and flow as input
-        self.upsampler = nn.Sequential(nn.Conv2d(2 + feature_channels, 256, 3, 1, 1),
-                                       nn.ReLU(inplace=True),
-                                       nn.Conv2d(256, upsample_factor ** 2 * 9, 1, 1, 0))
 
     def extract_feature(self, img0, img1):
         concat = torch.cat((img0, img1), dim=0)  # [2B, C, H, W]
@@ -64,42 +57,13 @@ class GMFlow(nn.Module):
 
         return feature0, feature1
 
-    def upsample_flow(self, flow, feature, bilinear=False, upsample_factor=8,
-                      ):
-        if bilinear:
-            up_flow = F.interpolate(flow, scale_factor=upsample_factor,
-                                    mode='bilinear', align_corners=True) * upsample_factor
-
-        else:
-            # convex upsampling
-            concat = torch.cat((flow, feature), dim=1)
-
-            mask = self.upsampler(concat)
-            b, flow_channel, h, w = flow.shape
-            mask = mask.view(b, 1, 9, self.upsample_factor, self.upsample_factor, h, w)  # [B, 1, 9, K, K, H, W]
-            mask = torch.softmax(mask, dim=2)
-
-            up_flow = F.unfold(self.upsample_factor * flow, [3, 3], padding=1)
-            up_flow = up_flow.view(b, flow_channel, 9, 1, 1, h, w)  # [B, 2, 9, 1, 1, H, W]
-
-            up_flow = torch.sum(mask * up_flow, dim=2)  # [B, 2, K, K, H, W]
-            up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)  # [B, 2, K, H, K, W]
-            up_flow = up_flow.reshape(b, flow_channel, self.upsample_factor * h,
-                                      self.upsample_factor * w)  # [B, 2, K*H, K*W]
-
-        return up_flow
-
     def forward(self, img0, img1,
                 attn_splits_list=[2],
                 corr_radius_list=[-1],
                 prop_radius_list=[-1],
                 pred_bidir_flow=False,
-                **kwargs,
                 ):
-
-        results = []
-        flow_preds = []
-
+        
         img0, img1 = normalize_img(img0, img1)  # [B, 3, H, W]
 
         # resolution low to high
@@ -112,18 +76,6 @@ class GMFlow(nn.Module):
         for scale_idx in range(self.num_scales):
             feature0, feature1 = feature0_list[scale_idx], feature1_list[scale_idx]
 
-            if pred_bidir_flow and scale_idx > 0:
-                # predicting bidirectional flow with refinement
-                feature0, feature1 = torch.cat((feature0, feature1), dim=0), torch.cat((feature1, feature0), dim=0)
-
-            upsample_factor = self.upsample_factor * (2 ** (self.num_scales - 1 - scale_idx))
-
-            if scale_idx > 0:
-                flow = F.interpolate(flow, scale_factor=2, mode='bilinear', align_corners=True) * 2
-
-            if flow is not None:
-                flow = flow.detach()
-                feature1 = flow_warp(feature1, flow)  # [B, C, H, W]
 
             attn_splits = attn_splits_list[scale_idx]
    
@@ -139,6 +91,7 @@ class GMFlow(nn.Module):
 if __name__ == '__main__':
     a = torch.rand(32,3,96,320).cuda()
     b = torch.rand(32,3,96,320).cuda()
-    model = GMFlow(num_scales=1).cuda()
-    out = model(a,b)
-    print(out.shape)
+    # model = GMFlow(num_scales=1).cuda()
+    # out = model(a,b)
+
+    c = torch.rand(32,480,480).unsqueeze(1)
