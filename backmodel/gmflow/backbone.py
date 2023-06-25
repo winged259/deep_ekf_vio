@@ -37,7 +37,7 @@ class ResidualBlock(nn.Module):
 
 
 class CNNEncoder(nn.Module):
-    def __init__(self, output_dim=196,
+    def __init__(self, output_dim=128,
                  norm_layer=nn.InstanceNorm2d,
                  num_output_scales=1,
                  **kwargs,
@@ -45,7 +45,7 @@ class CNNEncoder(nn.Module):
         super(CNNEncoder, self).__init__()
         self.num_branch = num_output_scales
 
-        feature_dims = [64, 96, 128, 196]
+        feature_dims = [64, 96, 128]
 
         self.conv1 = nn.Conv2d(3, feature_dims[0], kernel_size=7, stride=2, padding=3, bias=False)  # 1/2
         self.norm1 = norm_layer(feature_dims[0])
@@ -60,8 +60,7 @@ class CNNEncoder(nn.Module):
         self.layer3 = self._make_layer(feature_dims[2], stride=stride,
                                        norm_layer=norm_layer,
                                        )  # 1/4 or 1/8
-        self.layer4 = self._make_layer(feature_dims[3], stride=2, norm_layer=norm_layer)
-        self.conv2 = nn.Conv2d(feature_dims[3], output_dim, 1, 1, 0)
+        self.conv2 = nn.Conv2d(feature_dims[2], output_dim, 1, 1, 0)
 
         if self.num_branch > 1:
             if self.num_branch == 4:
@@ -106,7 +105,6 @@ class CNNEncoder(nn.Module):
         x = self.layer1(x)  # 1/2
         x = self.layer2(x)  # 1/4
         x = self.layer3(x)  # 1/8 or 1/4
-        x = self.layer4(x)      
         x = self.conv2(x)
 
         if self.num_branch > 1:

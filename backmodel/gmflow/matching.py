@@ -66,7 +66,6 @@ def local_correlation_softmax(feature0, feature1, local_radius,
                                    padding_mode=padding_mode, align_corners=True
                                    ).permute(0, 2, 1, 3)  # [B, H*W, C, (2R+1)^2]
     feature0_view = feature0.permute(0, 2, 3, 1).view(b, h * w, 1, c)  # [B, H*W, 1, C]
-
     corr = torch.matmul(feature0_view, window_feature).view(b, h * w, -1) / (c ** 0.5)  # [B, H*W, (2R+1)^2]
 
     # mask invalid locations
@@ -74,10 +73,10 @@ def local_correlation_softmax(feature0, feature1, local_radius,
 
     prob = F.softmax(corr, -1)  # [B, H*W, (2R+1)^2]
 
-    correspondence = torch.matmul(prob.unsqueeze(-2), sample_coords_softmax).squeeze(-2).view(
-        b, h, w, 2).permute(0, 3, 1, 2)  # [B, 2, H, W]
+    # correspondence = torch.matmul(prob.unsqueeze(-2), sample_coords_softmax).squeeze(-2).view(
+    #     b, h, w, 2).permute(0, 3, 1, 2)  # [B, 2, H, W]
 
-    flow = correspondence - coords_init
-    match_prob = prob
+    # flow = correspondence - coords_init
+    # match_prob = prob
 
-    return flow, match_prob
+    return prob

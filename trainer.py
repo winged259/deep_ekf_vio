@@ -108,7 +108,7 @@ class _TrainAssistant(object):
                 vis_meas_loss_invalid_imu = self.vis_meas_loss(vis_meas[s], vis_meas_covar[s], gt_rel_poses[s].cuda())
 
             # loss = vis_meas_loss_invalid_imu + loss_vis_meas +  loss_abs
-            loss =  vis_meas_loss_invalid_imu + loss_vis_meas + 5 * loss_abs
+            loss =  vis_meas_loss_invalid_imu + loss_vis_meas + loss_abs
         elif par.enable_ekf:
             loss, _, _ = self.ekf_loss(poses, gt_poses.cuda(), ekf_states, gt_rel_poses.cuda(), vis_meas, vis_meas_covar)
         else:
@@ -283,6 +283,7 @@ class _TrainAssistant(object):
         optimizer.zero_grad()
         loss = self.get_loss(data)
         loss.backward()
+        optimizer.step()
         return loss
 
     def schedule(self, d):
@@ -327,7 +328,7 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     e2e_vio_model = E2EVIO()
     e2e_vio_model = e2e_vio_model.cuda()
     # for param in e2e_vio_model.vo_module.parameters():
-    #     param.requires_grad = False
+    #     param.requires_grad = True
     # for param in e2e_vio_model.vo_module.extractor.model.parameters():
     #     param.requires_grad = True
     # for param in e2e_vio_model.vo_module.regressor.extractor.parameters():
@@ -373,7 +374,7 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
         state_dict_update = {key: state_dict_update[key] for key in state_dict_update
                              if key not in par.exclude_resume_weights
                             #  and 'vo_module.extractor' not in key
-                            #  and key != 'vo_module.regressor.firstconv.0.0.weight'
+                            #  and key != 'vo_module.extractor.backbone.conv2.weight'
                              }
         state_dict = e2e_vio_model.state_dict()
         state_dict_update = {k: v for k, v in state_dict_update.items() if k in state_dict}

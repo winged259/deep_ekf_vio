@@ -3,11 +3,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from params import par
 import torchvision.models as models
 from torchvision.models import ResNet18_Weights, resnet18, swin_b, Swin_B_Weights
 from torchvision.models.optical_flow import raft_large, Raft_Large_Weights, raft_small, Raft_Small_Weights
-from .common import *
 
 def conv3x3(in_channels, out_channels, stride=1, 
             padding=1, bias=True, groups=1):    

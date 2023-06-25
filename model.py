@@ -6,7 +6,6 @@ import torch_se3
 from params import par
 from backmodel.newnet import  Reg, RAFT, PoseRegressor, Res
 from backmodel.gm import GMFlow
-from utils import build_se3_transform
 
 class IMUKalmanFilter(nn.Module):
     STATE_VECTOR_DIM = 18
@@ -290,7 +289,7 @@ class E2EVIO(nn.Module):
         else:
             self.imu_noise_covar_weights.weight.data /= 10
 
-        self.init_covar_diag_sqrt = nn.Parameter(torch.tensor(par.init_covar_diag_sqrt, dtype=torch.float32))
+        self.init_covar_diag_sqrt = nn.Parameter(torch.tensor(np.zeros(18), dtype=torch.float32))
         if not par.train_init_covar:
             self.init_covar_diag_sqrt.requires_grad = False
 
@@ -330,14 +329,15 @@ class E2EVIO(nn.Module):
         vis_meas_covar_scale[0:3] = vis_meas_covar_scale[0:3] * par.k4
         imu_noise_covar = self.get_imu_noise_covar()
 
+        if prev_covar is None:
+            init_covar_diag_sqrt = torch.tensor(par.init_covar_diag_sqrt, dtype=torch.float32, device=images.device)
+            prev_covar = torch.diag(init_covar_diag_sqrt * init_covar_diag_sqrt +
+                                    par.init_covar_diag_eps).repeat(images.shape[0], 1, 1)
+
         features = self.vo_module.encode_image(images)
         # features = self.gru_layer(features)
         # features = self.regressor(features)
         num_timesteps = images.size(1) - 1  # equals to imu_data.size(1) - 1
-
-        if prev_covar is None:
-            prev_covar = torch.diag(self.init_covar_diag_sqrt * self.init_covar_diag_sqrt +
-                                    par.init_covar_diag_eps).repeat(images.shape[0], 1, 1)
 
         poses_over_timesteps = [prev_pose]
         states_over_timesteps = [prev_state]
@@ -348,40 +348,38 @@ class E2EVIO(nn.Module):
 
             # ekf predict
             pred_states, pred_covars = self.ekf_module.predict(imu_data[:, k], imu_noise_covar,
-                                                        states_over_timesteps[-1], covars_over_timesteps[-1])
+                                                                states_over_timesteps[-1], covars_over_timesteps[-1])
+            
+            vis_meas_and_covar = self.regressor(features[:,k])
 
             if k == 0:
                 prev_vis_meas = init_vis_meas
             else:
                 prev_vis_meas = vis_meas_over_timesteps[-1]
-            vis_meas_and_covar = self.regressor(features[:,k])
             vis_meas, est_vis_meas_covar = self.update_vis_meas(prev_vis_meas, vis_meas_and_covar) #only take norm scale
+
             vis_meas_covar_diag = par.vis_meas_covar_init_guess * \
-                                10 ** (par.vis_meas_covar_beta *
-                                        torch.tanh(par.vis_meas_covar_gamma * est_vis_meas_covar))
+                                    10 ** (par.vis_meas_covar_beta *
+                                            torch.tanh(par.vis_meas_covar_gamma * est_vis_meas_covar))
             
             vis_meas_covar_scaled = torch.diag_embed(vis_meas_covar_diag / vis_meas_covar_scale.view(1, 6))
             vis_meas_covar = torch.diag_embed(vis_meas_covar_diag)
-            
+
             # ekf correct
-            est_state, est_covar = self.ekf_module.update(pred_states[-1], 
-                                                            pred_covars[-1],
-                                                            vis_meas.unsqueeze(-1),
-                                                            vis_meas_covar_scaled,
-                                                            T_imu_cam)
+            est_state, est_covar = self.ekf_module.update(pred_states[-1], pred_covars[-1],
+                                                        vis_meas.unsqueeze(-1),
+                                                        vis_meas_covar_scaled,
+                                                        T_imu_cam)
             new_pose, new_state, new_covar = self.ekf_module.composition(poses_over_timesteps[-1],
-                                                                    est_state, est_covar)
-        
-            vis_meas_over_timesteps.append(vis_meas)
-            vis_meas_covar_over_timesteps.append(vis_meas_covar)
+                                                                        est_state, est_covar)
             poses_over_timesteps.append(new_pose)
             states_over_timesteps.append(new_state)
             covars_over_timesteps.append(new_covar)
-
+            vis_meas_over_timesteps.append(vis_meas)
+            vis_meas_covar_over_timesteps.append(vis_meas_covar)
 
         return torch.stack(vis_meas_over_timesteps, 1), \
             torch.stack(vis_meas_covar_over_timesteps, 1), \
             torch.stack(poses_over_timesteps, 1), \
             torch.stack(states_over_timesteps, 1), \
             torch.stack(covars_over_timesteps, 1)
-            

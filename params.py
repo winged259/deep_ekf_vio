@@ -11,7 +11,7 @@ np.set_printoptions(linewidth=1024)
 np.random.seed(0)
 torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.benchmark = True
 
 
 class AttrDict(dict):
@@ -42,7 +42,7 @@ class Parameters(object):
         self.results_dir = os.path.join(self.results_coll_dir,
                                         "train" + "_%s" % self.timestamp.strftime('%Y%m%d-%H-%M-%S'))
 
-        self.seq_len = 10
+        self.seq_len = 7
         self.sample_times = 1
 
         self.exclude_resume_weights = ["imu_noise_covar_weights", "init_covar_diag_sqrt"]
@@ -61,7 +61,7 @@ class Parameters(object):
         self.stateful_training = True
 
         # EKF parameters
-        self.enable_ekf = False
+        self.enable_ekf = True
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
@@ -75,7 +75,7 @@ class Parameters(object):
         self.pin_mem = True
         self.cache_image = True
         self.optimizer = torch.optim.Adam
-        self.optimizer_args = {'lr': 1e-4}
+        self.optimizer_args = {'lr': 1e-3}
         self.param_specific_lr = {
             "init_covar_diag_sqrt": 2*1e-1,
             "imu_noise_covar_weights.*": 2*1e-1
@@ -126,11 +126,11 @@ class KITTIParams(Parameters):
         self.eval_seq = 'K10'
 
 
-        # self.valid_seqs = ['K10']
-        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq and x not in self.valid_seqs]
+        self.valid_seqs = ['K10']
+        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq and x not in self.valid_seqs]
 
-        self.train_seqs = ['K07']
-        self.valid_seqs = ['K07']
+        # self.train_seqs = ['K07']
+        # self.valid_seqs = ['K07']
 
         self.img_w = 320
         self.img_h = 96
@@ -167,7 +167,7 @@ class KITTIParams(Parameters):
         }
         # error scale for covar loss, not really used,
         # but must be 1.0 for self.gaussian_pdf_loss = False
-        self.k4 = 1.0
+        self.k4 = 100.0
 
         self.gaussian_pdf_loss = False
 

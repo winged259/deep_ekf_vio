@@ -1,4 +1,4 @@
-folder='/mnt/data/teamAI/duy/deep_ekf_vio/results/train_20230623-22-43-36'
+folder='/mnt/data/teamAI/duy/deep_ekf_vio/results/train_20230625-11-50-28'
 
 python main.py --gpu_id=0\
                 --resume_model_from $folder/saved_model.valid\

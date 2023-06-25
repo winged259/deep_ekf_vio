@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from backmodel.gmflow.backbone import CNNEncoder
-from backmodel.gmflow.transformer import FeatureTransformer, FeatureFlowAttention
+from backmodel.gmflow.transformer import FeatureTransformer
 from backmodel.gmflow.matching import global_correlation_softmax
 from backmodel.gmflow.utils import normalize_img, feature_add_position
 
@@ -26,6 +26,7 @@ class GMFlow(nn.Module):
         self.upsample_factor = upsample_factor
         self.attention_type = attention_type
         self.num_transformer_layers = num_transformer_layers
+        self.pooling = nn.AdaptiveMaxPool2d(120)
 
         # CNN backbone
         self.backbone = CNNEncoder(output_dim=feature_channels, num_output_scales=num_scales)
@@ -69,8 +70,6 @@ class GMFlow(nn.Module):
         # resolution low to high
         feature0_list, feature1_list = self.extract_feature(img0, img1)  # list of features
 
-        flow = None
-
         assert len(attn_splits_list) == len(corr_radius_list) == len(prop_radius_list) == self.num_scales
 
         for scale_idx in range(self.num_scales):
@@ -85,13 +84,14 @@ class GMFlow(nn.Module):
             feature0, feature1 = self.transformer(feature0, feature1, attn_num_splits=attn_splits)
             # correlation and softmax
             prod = global_correlation_softmax(feature0, feature1, pred_bidir_flow)
+            prod = self.pooling(prod)
             return prod
 
 
 if __name__ == '__main__':
     a = torch.rand(32,3,96,320).cuda()
     b = torch.rand(32,3,96,320).cuda()
-    # model = GMFlow(num_scales=1).cuda()
-    # out = model(a,b)
+    model = GMFlow(num_scales=1).cuda()
+    out = model(a,b)
 
     c = torch.rand(32,480,480).unsqueeze(1)
