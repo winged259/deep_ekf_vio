@@ -31,12 +31,12 @@ def gen_trajectory_rel_iter(model, dataloader, initial_pose=np.eye(4, 4)):
                                                                        prev_state.cuda(), None,
                                                                        T_imu_cam.cuda())
         # lstm_states = lstm_states.detach()
-        vis_meas = vis_meas[:,:,-1].detach().cpu().numpy()
-        vis_meas_rot = vis_meas[:,:,:3]
+        vis_meas = vis_meas.detach().cpu().numpy()
+        # vis_meas_rot = vis_meas[:,:,:3]
         
-        vis_meas_trans_norm = torch.norm(vis_meas[:,:,3:], dim=2).unsqueeze(2).detach().cpu()
-        vis_meas_trans = vis_meas[:,:,3:] / vis_meas_trans_norm * gt_trans_norm
-        vis_meas = torch.cat((vis_meas_rot, vis_meas_trans), dim=2).detach().cpu().numpy()
+        # vis_meas_trans_norm = torch.norm(vis_meas[:,:,3:], dim=2).unsqueeze(2).detach().cpu()
+        # vis_meas_trans = vis_meas[:,:,3:] / vis_meas_trans_norm * gt_trans_norm
+        # vis_meas = torch.cat((vis_meas_rot, vis_meas_trans), dim=2).detach().cpu().numpy()
         vis_meas_covar = vis_meas_covar.detach().cpu().numpy()
 
         for i, rel_pose in enumerate(vis_meas[-1]):  # select the only batch

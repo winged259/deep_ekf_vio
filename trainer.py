@@ -124,22 +124,23 @@ class _TrainAssistant(object):
         # Weighted MSE Loss
         # angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
-        gamma = 0.8
-        gt_trans_norm = torch.norm(gt_rel_poses[:, :, 3:6], dim=2).unsqueeze(-1)
-        trans_loss = 0
-        angle_loss = 0
-        n = predicted_rel_poses.shape[2] # Num Iteration
-        for k in range (n):
-            pred = predicted_rel_poses[:,:,k]
-            trans_loss += gamma**(n - k) * self.loss_h(pred[:, :, 3:6] / torch.norm(pred[:, :, 3:6], dim=2).unsqueeze(-1), gt_rel_poses[:, :, 3:6] / gt_trans_norm)
-            angle_loss = self.loss_h(pred[:, :, 0:3], gt_rel_poses[:, :, 0:3])
-        trans_loss = trans_loss / n
-        angle_loss = angle_loss / n
+        # gamma = 0.8
+        # gt_trans_norm = torch.norm(gt_rel_poses[:, :, 3:6], dim=2).unsqueeze(-1)
+        # trans_loss = 0
+        # angle_loss = 0
+        # n = predicted_rel_poses.shape[2] # Num Iteration
+        # for k in range (n):
+        #     pred = predicted_rel_poses[:,:,k]
+        #     trans_loss += gamma**(n - k) * self.loss_h(pred[:, :, 3:6] / torch.norm(pred[:, :, 3:6], dim=2).unsqueeze(-1), gt_rel_poses[:, :, 3:6] / gt_trans_norm)
+        #     angle_loss = self.loss_h(pred[:, :, 0:3], gt_rel_poses[:, :, 0:3])
+        # trans_loss = trans_loss / n
+        # angle_loss = angle_loss / n
         
         # pred_trans_norm = torch.norm(predicted_rel_poses[:, :, 3:6], dim=2).unsqueeze(-1)
         # pred_trans_scaled = predicted_rel_poses[:, :, 3:6] /pred_trans_norm * gt_trans_norm
         # trans_loss = self.loss_h(pred_trans_scaled, gt_rel_poses[:,:,3:6])
-        # angle_loss = self.loss_h(predicted_rel_poses[:,:,0:3],gt_rel_poses[:, :, 0:3])
+        trans_loss = self.loss_h(predicted_rel_poses[:,:,3:6], gt_rel_poses[:,:,3:6])
+        angle_loss = self.loss_h(predicted_rel_poses[:,:,0:3],gt_rel_poses[:, :, 0:3])
 
         # angle_loss = self.loss_h(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # covar_loss = torch.mean(vis_meas_covar)
@@ -162,12 +163,12 @@ class _TrainAssistant(object):
         tag_name = "train" if self.model.training else "val"
         iterations = self.num_train_iterations if self.model.training else self.num_val_iterations
         add_scalar = logger.tensorboard.add_scalar
-        rot_x_loss = self.loss_h(predicted_rel_poses[:, :,-1, 0], gt_rel_poses[:, :, 0])
-        rot_y_loss = self.loss_h(predicted_rel_poses[:, :,-1, 1], gt_rel_poses[:, :, 1])
-        rot_z_loss = self.loss_h(predicted_rel_poses[:, :, -1,2], gt_rel_poses[:, :, 2])
-        trans_x_loss = self.loss_h(predicted_rel_poses[:, :,-1, 3], gt_rel_poses[:, :, 3])
-        trans_y_loss = self.loss_h(predicted_rel_poses[:, :,-1, 4], gt_rel_poses[:, :, 4])
-        trans_z_loss = self.loss_h(predicted_rel_poses[:, :,-1, 5], gt_rel_poses[:, :, 5])
+        rot_x_loss = self.loss_h(predicted_rel_poses[:, :, 0], gt_rel_poses[:, :, 0])
+        rot_y_loss = self.loss_h(predicted_rel_poses[:, :, 1], gt_rel_poses[:, :, 1])
+        rot_z_loss = self.loss_h(predicted_rel_poses[:, :, 2], gt_rel_poses[:, :, 2])
+        trans_x_loss = self.loss_h(predicted_rel_poses[:, :, 3], gt_rel_poses[:, :, 3])
+        trans_y_loss = self.loss_h(predicted_rel_poses[:, :, 4], gt_rel_poses[:, :, 4])
+        trans_z_loss = self.loss_h(predicted_rel_poses[:, :, 5], gt_rel_poses[:, :, 5])
         add_scalar(tag_name + "_vis/total_loss", loss, iterations)
         add_scalar(tag_name + "_vis/rot_loss", angle_loss, iterations)
         add_scalar(tag_name + "_vis/rot_loss/x", rot_x_loss, iterations)
@@ -344,13 +345,14 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     # NOTE: the pretrained model assumes image rgb values in range [-0.5, 0.5]
     if par.pretrained and not resume_model_path:
         pretrained_w = torch.load(par.pretrained)
+        # print(pretrained_w['model'].keys())
         logger.print('Load pretrained model')
-        vo_model_dict = e2e_vio_model.state_dict()
-        update_dict = {k: v for k, v in pretrained_w.items() if k in vo_model_dict
+        vo_model_dict = e2e_vio_model.vo_module.extractor.state_dict()
+        update_dict = {k: v for k, v in pretrained_w['model'].items() if k in vo_model_dict
                                                                 }
         assert (len(update_dict) > 0)
         vo_model_dict.update(update_dict)
-        e2e_vio_model.load_state_dict(vo_model_dict)
+        e2e_vio_model.vo_module.extractor.load_state_dict(vo_model_dict)
 
     # Create optimizer
     logger.print("Optimizing on parameters:")

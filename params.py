@@ -44,7 +44,7 @@ class Parameters(object):
 
         
         self.sample_times = 1
-        self.iters = 12
+        self.iters = 6
         self.exclude_resume_weights = ["imu_noise_covar_weights", "init_covar_diag_sqrt"]
 
         # VO Model parameters
@@ -65,8 +65,8 @@ class Parameters(object):
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
-        self.train_init_covar = True
-        self.train_imu_noise_covar = True
+        self.train_init_covar = False
+        self.train_imu_noise_covar = False
         self.vis_meas_covar_use_fixed = False
 
         # Training parameters
@@ -93,9 +93,10 @@ class Parameters(object):
         })
         # Pretrain, Resume training
 
-        self.pretrained = '/mnt/data/teamAI/duy/deep_ekf_vio/pretrained/raft-kitti.pth'
+        # self.pretrained = '/mnt/data/teamAI/duy/deep_ekf_vio/pretrained/raft-kitti.pth'
 
-        # self.pretrained = None
+        self.pretrained = None
+        # self.pretrained = '/mnt/data/teamAI/duy/deep_ekf_vio/pretrained/gmflow_kitti-285701a8.pth'
         # Choice:
         # None
         # './pretrained/flownets_bn_EPE2.459.pth.tar'
@@ -137,7 +138,7 @@ class KITTIParams(Parameters):
         self.img_w = 320
         self.img_h = 128
         self.batch_size = 32
-        self.seq_len = 10
+        self.seq_len = 9
         self.img_means = (-0.138843, -0.119405, -0.123209)
         self.img_stds = (1, 1, 1)
         self.minus_point_5 = True
@@ -166,8 +167,8 @@ class KITTIParams(Parameters):
         self.vis_meas_covar_gamma = 1
 
         # -----------------------------------------
-        self.k1 = 100  # rel loss angle multiplier
-        self.k2 = 500.  # abs loss angle multiplier
+        self.k1 = 1000  # rel loss angle multiplier
+        self.k2 = 5000.  # abs loss angle multiplier
         self.k3 = {  # (1-k3)*abs + k3*rel weighting, not actually used
             0: 0.5,
         }
@@ -197,13 +198,11 @@ class EUROCParams(Parameters):
         self.all_seqs = ['MH_01', 'MH_02', 'MH_03', 'MH_04', 'MH_05', "V1_01", "V1_02", 'V1_03', "V2_01", "V2_02"]
         self.eval_seq = "V1_02"
 
-        self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
-        self.train_seqs = ['MH_01', 'MH_02', 'MH_03', 'MH_04', "V1_01", "V1_02", "V2_01"]
-        # self.train_seqs = ['V2_01']
-        self.valid_seqs = [self.eval_seq]
+        # self.train_seqs = [x for x in self.all_seqs if not x == self.eval_seq]
+        # self.train_seqs = ['MH_01', 'MH_02', 'MH_03', 'MH_04', "V1_01", "V1_02", "V2_01"]
+        # self.valid_seqs = [self.eval_seq]
 
         self.train_seqs = ['MH_01', 'MH_02', 'MH_03', 'MH_04', "V1_01", "V1_02", "V2_01"]
-        # self.valid_seqs = ['MH_05', "V1_03", "V2_02"]
         self.valid_seqs = ['MH_05']
 
         self.img_w = 256

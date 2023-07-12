@@ -220,7 +220,7 @@ class Res(nn.Module):
 class PoseRegressor(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        fcnum = 1280
+        fcnum = 2560
 
         fc1_trans = linear(fcnum, 128)
         fc2_trans = linear(128,32)
