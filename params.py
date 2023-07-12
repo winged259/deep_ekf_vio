@@ -44,7 +44,7 @@ class Parameters(object):
 
         
         self.sample_times = 1
-        self.iters = 6
+        self.iters = 1
         self.exclude_resume_weights = ["imu_noise_covar_weights", "init_covar_diag_sqrt"]
 
         # VO Model parameters
@@ -61,7 +61,7 @@ class Parameters(object):
         self.stateful_training = True
 
         # EKF parameters
-        self.enable_ekf = True
+        self.enable_ekf = False
         self.T_imu_cam_override = np.eye(4, 4)
         self.cal_override_enable = True
 
@@ -95,8 +95,8 @@ class Parameters(object):
 
         # self.pretrained = '/mnt/data/teamAI/duy/deep_ekf_vio/pretrained/raft-kitti.pth'
 
-        self.pretrained = None
-        # self.pretrained = '/mnt/data/teamAI/duy/deep_ekf_vio/pretrained/gmflow_kitti-285701a8.pth'
+        # self.pretrained = None
+        self.pretrained = '/mnt/data/teamAI/duy/deep_ekf_vio/pretrained/gmflow_kitti-285701a8.pth'
         # Choice:
         # None
         # './pretrained/flownets_bn_EPE2.459.pth.tar'
@@ -137,8 +137,8 @@ class KITTIParams(Parameters):
 
         self.img_w = 320
         self.img_h = 128
-        self.batch_size = 32
-        self.seq_len = 9
+        self.batch_size = 128
+        self.seq_len = 2
         self.img_means = (-0.138843, -0.119405, -0.123209)
         self.img_stds = (1, 1, 1)
         self.minus_point_5 = True
@@ -149,7 +149,7 @@ class KITTIParams(Parameters):
                                               1e-2, 1e-2, 1e-2,  # v
                                               1e-1, 1e-1, 1e-1,  # bw
                                               1e1, 1e1, 1e1,
-                                              5e0  # lambd
+                                              1e0  # lambd
                                               ])
         self.init_covar_diag_eps = 1e-12
         #
