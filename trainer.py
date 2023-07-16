@@ -340,7 +340,7 @@ def train(resume_model_path, resume_optimizer_path, train_description ='train'):
     #     param.requires_grad = True
     # for param in e2e_vio_model.vo_module.regressor.extractor.parameters():
     #     param.requires_grad = False
-    online_evaluator = _OnlineDatasetEvaluator(e2e_vio_model, par.valid_seqs, par.seq_len)
+    online_evaluator = _OnlineDatasetEvaluator(e2e_vio_model, par.valid_seqs, 50)
 
     # Load FlowNet weights pretrained with FlyingChairs
     # NOTE: the pretrained model assumes image rgb values in range [-0.5, 0.5]

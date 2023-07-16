@@ -71,9 +71,9 @@ class Parameters(object):
 
         # Training parameters
         self.epochs = 30
-        self.batch_size = 64
-        self.seq_len = 6
-        self.iters = 6
+        self.batch_size = 4
+        self.seq_len = 10
+        self.iters = 12
         self.pin_mem = True
         self.cache_image = True
         self.optimizer = torch.optim.Adam
@@ -175,7 +175,7 @@ class KITTIParams(Parameters):
         self.gaussian_pdf_loss = False
 
         self.data_aug_transforms = AttrDict({
-            "enable": True,
+            "enable": False,
             "lr_flip": True,
             "ud_flip": False,
             "lrud_flip": False,
