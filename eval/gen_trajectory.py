@@ -92,7 +92,7 @@ def gen_trajectory_abs_iter(model, dataloaders):
 
         vis_meas, vis_meas_covar, est_poses, est_ekf_states, est_ekf_covars = \
             model.forward(images, imu_data,  prev_pose, prev_state, prev_covar, T_imu_cam, prev_vis_meas, prev_vis_meas_covar)
-
+        vis_meas = vis_meas[:,:,-1]
         est_poses = scale_pose(est_poses, gt_poses)
 
         vis_meas_rot = vis_meas[:,:,:3]

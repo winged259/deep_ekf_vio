@@ -71,12 +71,12 @@ class Parameters(object):
 
         # Training parameters
         self.epochs = 30
-        self.batch_size = 4
-        self.seq_len = 10
+        self.batch_size = 16
+        self.seq_len = 6
         self.iters = 12
         self.pin_mem = True
         self.cache_image = True
-        self.optimizer = torch.optim.Adam
+        self.optimizer = torch.optim.AdamW
         self.optimizer_args = {'lr': 1e-4}
         self.param_specific_lr = {
             "init_covar_diag_sqrt": 2*1e-1,

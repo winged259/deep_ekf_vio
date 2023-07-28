@@ -110,7 +110,7 @@ class _TrainAssistant(object):
                 vis_meas_loss_invalid_imu = self.vis_meas_loss(vis_meas[s], vis_meas_covar[s], gt_rel_poses[s].cuda())
 
             # loss = vis_meas_loss_invalid_imu + loss_vis_meas +  loss_abs
-            loss =  vis_meas_loss_invalid_imu + loss_vis_meas + loss_abs
+            loss =  vis_meas_loss_invalid_imu +100* loss_vis_meas + loss_abs
         elif par.enable_ekf:
             loss, _, _ = self.ekf_loss(poses, gt_poses.cuda(), ekf_states, gt_rel_poses.cuda(), vis_meas, vis_meas_covar)
         else:
@@ -129,19 +129,20 @@ class _TrainAssistant(object):
         # angle_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
         # trans_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
 
-        trans_loss = self.loss_h(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
-        # trans_loss = self.sequence_loss(predicted_rel_poses[:, :, 0:3],gt_rel_poses[:, :, 0:3])
-                        # self.loss_fn1(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
-        # gt_trans_norm = torch.norm(gt_rel_poses[:, :, 3:6], dim=2).unsqueeze(2)
-        # pred_trans_norm = torch.norm(predicted_rel_poses[:, :, 3:6], dim=2).unsqueeze(2)
-        # pred_trans_scaled = predicted_rel_poses[:, :, 3:6]/ pred_trans_norm * gt_trans_norm
-        # trans_loss = self.loss_h(pred_trans_scaled, gt_rel_poses[:,:,3:6])
-        # angle_loss = self.loss_h(predicted_rel_poses[:,:,0:3],gt_rel_poses[:, :, 0:3])
-                        # self.loss_fn1(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])) \
-        # trans_loss = self.loss_fn1(predicted_rel_poses[:,:,3:6],gt_rel_poses[:,:,3:6])
-
-        angle_loss = self.loss_h(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
-        # covar_loss = torch.mean(vis_meas_covar)
+        # trans_loss = self.loss_h(predicted_rel_poses[:, :, 3:6], gt_rel_poses[:, :, 3:6])
+        # angle_loss = self.loss_h(predicted_rel_poses[:, :, 0:3], gt_rel_poses[:, :, 0:3])
+        gamma = 0.8
+        gt_trans_norm = torch.norm(gt_rel_poses[:, :, 3:6], dim=2).unsqueeze(-1)
+        trans_loss = 0
+        angle_loss = 0
+        n = predicted_rel_poses.shape[2] # Num Iteration
+        for k in range (n):
+            pred = predicted_rel_poses[:,:,k]
+            trans_loss += gamma**(n - k) * self.loss_h(pred[:, :, 3:6] / torch.norm(pred[:, :, 3:6], dim=2).unsqueeze(-1),\
+                                                        gt_rel_poses[:, :, 3:6] / gt_trans_norm)
+            angle_loss = self.loss_h(pred[:, :, 0:3], gt_rel_poses[:, :, 0:3])
+        trans_loss = trans_loss / n
+        angle_loss = angle_loss / n
 
         if par.gaussian_pdf_loss:
             Q_det = torch.prod(torch.diagonal(vis_meas_covar, dim1=-2, dim2=-1), -1)
@@ -161,12 +162,12 @@ class _TrainAssistant(object):
         tag_name = "train" if self.model.training else "val"
         iterations = self.num_train_iterations if self.model.training else self.num_val_iterations
         add_scalar = logger.tensorboard.add_scalar
-        rot_x_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 0], gt_rel_poses[:, :, 0])
-        rot_y_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 1], gt_rel_poses[:, :, 1])
-        rot_z_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 2], gt_rel_poses[:, :, 2])
-        trans_x_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 3], gt_rel_poses[:, :, 3])
-        trans_y_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 4], gt_rel_poses[:, :, 4])
-        trans_z_loss = torch.nn.functional.mse_loss(predicted_rel_poses[:, :, 5], gt_rel_poses[:, :, 5])
+        rot_x_loss = self.loss_h(predicted_rel_poses[:, :,-1, 0], gt_rel_poses[:, :, 0])
+        rot_y_loss = self.loss_h(predicted_rel_poses[:, :,-1, 1], gt_rel_poses[:, :, 1])
+        rot_z_loss = self.loss_h(predicted_rel_poses[:, :,-1, 2], gt_rel_poses[:, :, 2])
+        trans_x_loss = self.loss_h(predicted_rel_poses[:, :,-1, 3], gt_rel_poses[:, :, 3])
+        trans_y_loss = self.loss_h(predicted_rel_poses[:, :,-1, 4], gt_rel_poses[:, :, 4])
+        trans_z_loss = self.loss_h(predicted_rel_poses[:, :,-1, 5], gt_rel_poses[:, :, 5])
         add_scalar(tag_name + "_vis/total_loss", loss, iterations)
         add_scalar(tag_name + "_vis/rot_loss", angle_loss, iterations)
         add_scalar(tag_name + "_vis/rot_loss/x", rot_x_loss, iterations)
@@ -177,20 +178,20 @@ class _TrainAssistant(object):
         add_scalar(tag_name + "_vis/trans_loss/y", trans_y_loss, iterations)
         add_scalar(tag_name + "_vis/trans_loss/z", trans_z_loss, iterations)
 
-        vis_meas_covar_diag = torch.diagonal(vis_meas_covar, dim1=-2, dim2=-1)
         add_hist = logger.tensorboard.add_histogram
-        add_scalar(tag_name + "_vis_covar/ave/rot_x", torch.mean(vis_meas_covar_diag[:, :, 0]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/rot_y", torch.mean(vis_meas_covar_diag[:, :, 1]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/rot_z", torch.mean(vis_meas_covar_diag[:, :, 2]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/trans_x", torch.mean(vis_meas_covar_diag[:, :, 3]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/trans_y", torch.mean(vis_meas_covar_diag[:, :, 4]), iterations)
-        add_scalar(tag_name + "_vis_covar/ave/trans_z", torch.mean(vis_meas_covar_diag[:, :, 5]), iterations)
-        add_hist(tag_name + "_vis_covar/hist/rot_x", vis_meas_covar_diag[:, :, 0].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/rot_y", vis_meas_covar_diag[:, :, 1].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/rot_z", vis_meas_covar_diag[:, :, 2].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/trans_x", vis_meas_covar_diag[:, :, 3].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/trans_y", vis_meas_covar_diag[:, :, 4].view(-1), iterations)
-        add_hist(tag_name + "_vis_covar/hist/trans_z", vis_meas_covar_diag[:, :, 5].view(-1), iterations)
+        add_scalar(tag_name + "_vis_covar/ave/rot_x", torch.mean(vis_meas_covar[:, :, 0]), iterations)
+        add_scalar(tag_name + "_vis_covar/ave/rot_y", torch.mean(vis_meas_covar[:, :, 1]), iterations)
+        add_scalar(tag_name + "_vis_covar/ave/rot_z", torch.mean(vis_meas_covar[:, :, 2]), iterations)
+        add_scalar(tag_name + "_vis_covar/ave/trans_x", torch.mean(vis_meas_covar[:, :, 3]), iterations)
+        add_scalar(tag_name + "_vis_covar/ave/trans_y", torch.mean(vis_meas_covar[:, :, 4]), iterations)
+        add_scalar(tag_name + "_vis_covar/ave/trans_z", torch.mean(vis_meas_covar[:, :, 5]), iterations)
+        add_hist(tag_name + "_vis_covar/hist/rot_x", vis_meas_covar[:, :,-1, 0].reshape(-1), iterations)
+        add_hist(tag_name + "_vis_covar/hist/rot_y", vis_meas_covar[:, :,-1, 1].reshape(-1), iterations)
+        add_hist(tag_name + "_vis_covar/hist/rot_z", vis_meas_covar[:, :,-1, 2].reshape(-1), iterations)
+        add_hist(tag_name + "_vis_covar/hist/trans_x", vis_meas_covar[:, :,-1, 3].reshape(-1), iterations)
+        add_hist(tag_name + "_vis_covar/hist/trans_y", vis_meas_covar[:, :,-1, 4].reshape(-1), iterations)
+        add_hist(tag_name + "_vis_covar/hist/trans_z", vis_meas_covar[:, :,-1, 5].reshape(-1), iterations)
+
 
         return loss
 

@@ -324,13 +324,13 @@ class E2EVIO(nn.Module):
         for i in range(features.shape[1]):
             new_pose = self.regressor(features[:,i])
             new_covar = new_pose[:,6:]
-            new_pose = new_pose[:,:6]
+            new_pose1 = new_pose[:,:6]
             prev_pose_norm = torch.norm(prev_pose[:,3:], dim = -1).unsqueeze(-1)
-            new_pose_norm = torch.norm(new_pose[:,3:], dim=-1).unsqueeze(-1)
+            new_pose_norm = torch.norm(new_pose1[:,3:], dim=-1).unsqueeze(-1)
         # print(new_pose_norm.shape)
         # print(prev_pose_norm.shape)
         # print(new_pose.shape)
-            new_pose = torch.cat((new_pose[:,:3],new_pose[:,3:]/new_pose_norm * prev_pose_norm), dim=1)
+            new_pose = torch.cat((new_pose1[:,:3],new_pose1[:,3:]/new_pose_norm * prev_pose_norm), dim=1)
             vis_dict.append(new_pose)
             covar_dict.append(new_covar)
         return torch.stack(vis_dict, dim=1),\
@@ -355,7 +355,7 @@ class E2EVIO(nn.Module):
         num_timesteps = images.size(1) - 1  # equals to imu_data.size(1) - 1
         
         init_vis = torch.stack([prev_vis_meas] *par.iters, dim=1)
-        init_covar = torch.stack([prev_vis_meas]* par.iters, dim=1)
+        init_covar = torch.stack([prev_vis_meas_covar]* par.iters, dim=1)
         poses_over_timesteps = [prev_pose]
         states_over_timesteps = [prev_state]
         covars_over_timesteps = [prev_covar]
@@ -372,7 +372,7 @@ class E2EVIO(nn.Module):
             temp_state = [pred_states[-1]]
             for i in range(par.iters):
                 vis_meas = vis_meas_over_timesteps[-1][:,i]
-            
+                
                 vis_meas_covar = torch.diagonal(vis_meas_covar_over_timesteps[-1][:,i], dim1=-2, dim2=-1)
                 if par.vis_meas_covar_use_fixed:
                     vis_meas_covar_diag = torch.tensor(par.vis_meas_fixed_covar,
